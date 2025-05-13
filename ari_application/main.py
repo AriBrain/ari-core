@@ -1,13 +1,18 @@
+# === Standard Library Imports ===
 import sys
 import os
-from ui.main_window import BrainNav
-from ui.start_window import StartWindow  # Import the StartWindow class
-from PyQt5.QtGui import QIcon
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QApplication
-from ari_application.ui.splash_screen import SplashScreen
 import time
-import qdarktheme  # Make sure qdarktheme is installed
+
+# === Third-Party Library Imports ===
+import qdarktheme
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QIcon
+from PyQt5.QtWidgets import QApplication
+
+# === Internal Application Imports ===
+from ari_application.ui.main_window import BrainNav
+from ari_application.ui.start_window import StartWindow
+from ari_application.ui.splash_screen import SplashScreen
 
 def main():   
     # Enable HiDPI for better scaling on high-resolution displays
