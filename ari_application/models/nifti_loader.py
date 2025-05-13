@@ -137,6 +137,7 @@ class NiftiLoader:
             OrthViewSetup(self.brain_nav).setup_viewer()
         
         except Exception as e:
+            print('error in load background image')
             # error_handler.handle_exception(e)  # Use ErrorHandler to handle the exception
             return None, None
         
