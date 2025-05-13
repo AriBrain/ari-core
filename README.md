@@ -1,4 +1,4 @@
-# My Application
+# ARI Brain
 
 ## Overview
 ARIbrain: All-Resolutions Inference for fMRI
