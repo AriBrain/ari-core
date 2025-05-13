@@ -9,6 +9,5 @@ pyvista
 pyvistaqt
 pyqtdarktheme
 python-dotenv
-libcpp
 cython
 setuptools
