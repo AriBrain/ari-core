@@ -5,7 +5,7 @@ from ui.start_window import StartWindow  # Import the StartWindow class
 from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QApplication
-from ui.splash_screen import SplashScreen
+from ari_application.ui.splash_screen import SplashScreen
 import time
 import qdarktheme  # Make sure qdarktheme is installed
 
