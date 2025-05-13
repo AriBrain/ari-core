@@ -7,7 +7,7 @@ pyqt5
 pyqtgraph
 pyvista
 pyvistaqt
-qdarktheme==2.1.0
+qdarktheme>=1.2.5
 python-dotenv
 libcpp
 cython
