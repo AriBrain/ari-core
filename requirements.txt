@@ -7,7 +7,7 @@ pyqt5
 pyqtgraph
 pyvista
 pyvistaqt
-qdarktheme
+pyqtdarktheme
 python-dotenv
 libcpp
 cython
