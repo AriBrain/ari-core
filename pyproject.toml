@@ -10,6 +10,26 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "aribrain"
 version = "0.1.0"
+description = "All-Resolutions Inference for fMRI"
+requires-python = "==3.10.14"
+dependencies = [
+    "numpy",
+    "pandas",
+    "nibabel",
+    "scipy",
+    "nilearn",
+    "pyqt5",
+    "pyqtgraph",
+    "pyvista",
+    "pyvistaqt",
+    "pyqtdarktheme",
+    "python-dotenv",
+    "cython",
+    "setuptools"
+]
+
+[project.scripts]
+aribrain = "ari_application.main:main"
 
 [tool.setuptools]
 include-package-data = true
