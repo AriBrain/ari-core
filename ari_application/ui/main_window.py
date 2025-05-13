@@ -12,7 +12,6 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QVBoxLayout, QWidget, QHBoxLayout, QGridLayout,  QDesktopWidget, QSpacerItem, QSizePolicy, QListWidgetItem
 )
 
-
 # **Project-Specific Imports (Ordered by Functionality)**
 from ari_application.controllers.mouse_interactions import MouseInteractions
 from ari_application.models.nifti_loader import NiftiLoader
