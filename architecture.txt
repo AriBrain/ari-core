@@ -1,0 +1,96 @@
+
+  BrainNav/
+├── controllers/
+│   ├── __init__.py
+│   ├── mouse_interactions.py
+├── error_handling/
+│   ├── show_error.py
+├── models/
+│   ├── __init__.py
+│   ├── metrics.py
+│   ├── nifti_loader.py
+├── orth_views/
+│   ├── __init__.py
+│   ├── orth_view_setup.py
+│   ├── orth_view_update.py
+├── resources/
+│   ├── __init__.py
+├── ui/
+│   ├── __init__.py
+│   ├── main_window.py
+│   ├── upload_dialog.py
+├── __init__.py
+├── architecture.txt
+├── main.py
+
+
+
+main.py
+
+	•	main()
+
+ui/
+
+main_window.py
+
+	•	MainWindow.__init__(self)
+	•	MainWindow.upload_file(self)
+	•	MainWindow.update_views(self, data)
+	•	MainWindow.update_metrics(self, header)
+	•	MainWindow.reset_view(self)
+	•	MainWindow.show_error(self, message)
+
+orth_views/
+
+orth_view.py
+
+	•	OrthView.__init__(self, title)
+	•	OrthView.set_crosshair(self, position)
+	•	OrthView.add_crosshair(self)
+	•	OrthView.clear_crosshair(self)
+	•	OrthView.setup_view(self)
+
+models/
+
+nifti_loader.py
+
+	•	NiftiLoader.load(file_path)
+	•	NiftiLoader.reorient_to_ras(image, data)
+
+metrics.py
+
+	•	Metrics.extract_metrics(header, crosshair_position, data)
+
+controllers/
+
+mouse_interactions.py
+
+    •   MouseInteractions.eventFilter(self, source, event)
+	•	MouseInteractions.handle_drag(self, pos, source)
+	•	MouseInteractions.handle_zoom(self, event, source)
+	•	MouseInteractions.handle_scroll(self, event, source)
+	•	MouseInteractions.handle_pan(self, pos, source)
+	•	MouseInteractions.on_mouse_click(self, event, source)
+	•	MouseInteractions.move_crosshair_and_slices(self, pos, source)
+
+
+view_updater.py
+
+	•	ViewUpdater.update_slices(self)
+	•	ViewUpdater.update_axial_slice(self)
+	•	ViewUpdater.update_sagittal_slice(self)
+	•	ViewUpdater.update_coronal_slice(self)
+	•	ViewUpdater.set_initial_ranges(self)
+	•	ViewUpdater.get_ranges(self)
+	•	ViewUpdater.set_ranges(self)
+    •	MouseInteractions.update_crosshairs(self)
+
+resources/
+
+styles.py
+
+	•	upload_button_styling
+	•	reset_button_styling
+
+
+

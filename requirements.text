@@ -1,0 +1,14 @@
+numpy
+pandas
+nibabel
+scipy
+nilearn
+pyqt5
+pyqtgraph
+pyvista
+pyvistaqt
+qdarktheme
+python-dotenv
+libcpp
+cython
+setuptools

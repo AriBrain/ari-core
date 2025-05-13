@@ -1,0 +1,30 @@
+Installation Steps 
+
+Repository Cloning:
+•	Cloning the repository copies all the files, including Python, C++, and Cython files, to your local machine.
+•	You need to navigate to the root directory where setup.py is located to run installation commands.
+
+Package Installation with pip:
+•	The command pip install . is used in the root directory of the project.
+•	pip looks for the setup.py file in the current directory and executes it.
+    •	Setup Script (setup.py):
+        •	Defines the package metadata (name, version, author, etc.).
+        •	Lists the packages and modules to be included in the installation.
+        •	Specifies the extension modules to be compiled using cythonize.
+        •	Specifies any additional build dependencies, such as Cython and NumPy.
+
+Building Extensions:
+•	cythonize converts .pyx files to C++.
+•	The C++ compiler compiles these files along with other C++ source files into a shared object.
+•	These shared objects are installed and can be imported as Python modules.
+
+MANIFEST.in:
+•	The MANIFEST.in file ensures that all necessary files are included in the source distribution created by setup.py.
+•	It is especially useful for including non-Python files and Cython/C++ source files.
+•	For example:
+    •	include README.md: Ensures the README file is included.
+    •	include requirements.txt: Ensures the requirements file is included.
+    •	recursive-include my_application/cython *.pyx *.cpp *.h: Ensures all .pyx, .cpp, and .h files in the cython directory are included.
+Running Tests:
+•	python setup.py test runs the test suite defined in the tests directory.
+•	Ensures that all components, including the compiled extensions, work correctly.

@@ -1,0 +1,296 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2761
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fnil\fcharset0 .SFNS-Bold;\f1\fnil\fcharset0 .SFNS-Regular;\f2\fnil\fcharset0 .SFNS-Heavy;
+\f3\froman\fcharset0 TimesNewRomanPSMT;\f4\fnil\fcharset0 .AppleSystemUIFontMonospaced-Regular;\f5\fnil\fcharset0 .AppleSystemUIFontMonospaced-Semibold;
+}
+{\colortbl;\red255\green255\blue255;\red14\green14\blue14;}
+{\*\expandedcolortbl;;\cssrgb\c6700\c6700\c6700;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww19860\viewh16260\viewkind0
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f0\b\fs30 \cf2 Understanding C++, Compiling, and Cython: A Theoretical Overview
+\f1\b0\fs28 \
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f2\b\fs26 \cf2 Overview of Files and Their Roles
+\f1\b0\fs28 \
+\
+\pard\tqr\tx260\tx420\li420\fi-420\sl324\slmult1\partightenfactor0
+
+\f3 \cf2 	1.	
+\f0\b hommel.cpp
+\f1\b0 \
+\pard\tqr\tx500\tx660\li660\fi-660\sl324\slmult1\partightenfactor0
+\cf2 	\'95	
+\f0\b Role
+\f1\b0 : This file contains the actual C++ implementation of your functions. These functions perform the computational tasks required by your application.\
+	\'95	
+\f0\b Contents
+\f1\b0 : C++ code defining the logic for various operations like 
+\f4 findhull
+\f1 , 
+\f4 findalpha
+\f1 , and other functions.\
+	\'95	
+\f0\b Purpose
+\f1\b0 : To provide high-performance computational routines that can be called from higher-level languages like Python via Cython.\
+\pard\tqr\tx260\tx420\li420\fi-420\sl324\slmult1\partightenfactor0
+
+\f3 \cf2 	2.	
+\f0\b hommel.pyx
+\f1\b0 \
+\pard\tqr\tx500\tx660\li660\fi-660\sl324\slmult1\partightenfactor0
+\cf2 	\'95	
+\f0\b Role
+\f1\b0 : This is a Cython file. Cython is a language that makes it easy to write C extensions for Python. 
+\f4 .pyx
+\f1  files contain Cython code, which is a blend of Python and C-like syntax.\
+	\'95	
+\f0\b Contents
+\f1\b0 : Cython declarations for C++ functions. These declarations enable the integration of C++ code into Python, allowing Python to call these C++ functions.\
+	\'95	
+\f0\b Purpose
+\f1\b0 : To bridge the gap between Python and C++. It declares the C++ functions and wraps them in Python functions so they can be used as if they were native Python functions.\
+\pard\tqr\tx260\tx420\li420\fi-420\sl324\slmult1\partightenfactor0
+
+\f3 \cf2 	3.	
+\f0\b hommel.h
+\f1\b0 \
+\pard\tqr\tx500\tx660\li660\fi-660\sl324\slmult1\partightenfactor0
+\cf2 	\'95	
+\f0\b Role
+\f1\b0 : This is a header file in C++. Header files declare the functions and variables that are defined in 
+\f4 .cpp
+\f1  files and make them available to other 
+\f4 .cpp
+\f1  files or Cython files.\
+	\'95	
+\f0\b Contents
+\f1\b0 : Function declarations that correspond to the implementations in 
+\f4 hommel.cpp
+\f1 .\
+	\'95	
+\f0\b Purpose
+\f1\b0 : To allow the functions in 
+\f4 hommel.cpp
+\f1  to be called from other files, ensuring the code is modular and organized.\
+\pard\tqr\tx260\tx420\li420\fi-420\sl324\slmult1\partightenfactor0
+
+\f3 \cf2 	4.	
+\f0\b hommel.cpython-310-darwin.so
+\f1\b0 \
+\pard\tqr\tx500\tx660\li660\fi-660\sl324\slmult1\partightenfactor0
+\cf2 	\'95	
+\f0\b Role
+\f1\b0 : This is the compiled shared object file resulting from building the Cython extension. It is a binary file that can be imported directly into Python.\
+	\'95	
+\f0\b Contents
+\f1\b0 : Machine code generated from the combination of your C++ and Cython code.\
+	\'95	
+\f0\b Purpose
+\f1\b0 : To be the final, optimized, and executable form of your Cython module that Python can import and use directly.\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+\cf2 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f2\b\fs26 \cf2 Compilation Process
+\f1\b0\fs28 \
+\
+\pard\tqr\tx260\tx420\li420\fi-420\sl324\slmult1\partightenfactor0
+
+\f3 \cf2 	1.	
+\f0\b Writing C++ Code (
+\f5 hommel.cpp
+\f0  and 
+\f5 hommel.h
+\f0 )
+\f1\b0 \
+\pard\tqr\tx500\tx660\li660\fi-660\sl324\slmult1\partightenfactor0
+\cf2 	\'95	
+\f0\b C++ Implementation
+\f1\b0 : You write the logic for your computational tasks in 
+\f4 hommel.cpp
+\f1 .\
+	\'95	
+\f0\b Declarations
+\f1\b0 : The corresponding declarations are placed in 
+\f4 hommel.h
+\f1  to allow other files to know about the existence and signatures of these functions.\
+\pard\tqr\tx260\tx420\li420\fi-420\sl324\slmult1\partightenfactor0
+
+\f3 \cf2 	2.	
+\f0\b Cython Integration (
+\f5 hommel.pyx
+\f0 )
+\f1\b0 \
+\pard\tqr\tx500\tx660\li660\fi-660\sl324\slmult1\partightenfactor0
+\cf2 	\'95	
+\f0\b Cython Declarations
+\f1\b0 : In your 
+\f4 .pyx
+\f1  file, you declare the C++ functions using 
+\f4 cdef extern from
+\f1 . This tells Cython about the functions implemented in your C++ code.\
+	\'95	
+\f0\b Python Wrappers
+\f1\b0 : You can also define Python functions that call these C++ functions, providing a Pythonic interface to your C++ code.\
+\pard\tqr\tx260\tx420\li420\fi-420\sl324\slmult1\partightenfactor0
+
+\f3 \cf2 	3.	
+\f0\b Compiling
+\f1\b0 \
+\pard\tqr\tx500\tx660\li660\fi-660\sl324\slmult1\partightenfactor0
+\cf2 	\'95	
+\f0\b Cython Compilation
+\f1\b0 : When you run 
+\f4 setup.py
+\f1 , Cython first translates the 
+\f4 .pyx
+\f1  file into C or C++ code. This code includes calls to the functions declared in 
+\f4 hommel.h
+\f1  and implemented in 
+\f4 hommel.cpp
+\f1 .\
+	\'95	
+\f0\b C++ Compilation
+\f1\b0 : The C/C++ compiler then compiles this translated code along with your original 
+\f4 hommel.cpp
+\f1  file into a shared object file (
+\f4 .so
+\f1  on Unix-like systems or 
+\f4 .pyd
+\f1  on Windows).\
+\pard\tqr\tx260\tx420\li420\fi-420\sl324\slmult1\partightenfactor0
+
+\f3 \cf2 	4.	
+\f0\b Linking
+\f1\b0 \
+\pard\tqr\tx500\tx660\li660\fi-660\sl324\slmult1\partightenfactor0
+\cf2 	\'95	
+\f0\b Shared Object Creation
+\f1\b0 : The compilation process links your compiled code into a single shared object file. This file contains all the machine code necessary to execute your functions and is ready to be used by Python.\
+\pard\tqr\tx260\tx420\li420\fi-420\sl324\slmult1\partightenfactor0
+
+\f3 \cf2 	5.	
+\f0\b Using in Python
+\f1\b0 \
+\pard\tqr\tx500\tx660\li660\fi-660\sl324\slmult1\partightenfactor0
+\cf2 	\'95	
+\f0\b Importing
+\f1\b0 : Once compiled, you can import the shared object file in Python just like any other module.\
+	\'95	
+\f0\b Function Calls
+\f1\b0 : You can call the Python wrapper functions defined in your 
+\f4 .pyx
+\f1  file, which in turn call the underlying C++ functions.\
+\
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f0\b\fs30 \cf2 Direct Execution in Compiled Languages vs. Interpreted Languages
+\f1\b0\fs28 \
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f2\b\fs26 \cf2 Compiled Languages (like C++)
+\f1\b0\fs28 \
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f0\b \cf2 Direct Execution
+\f1\b0 \cf2 :\
+\
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\partightenfactor0
+\cf2 	\'95	
+\f0\b Machine Code
+\f1\b0 : When you write a program in a compiled language like C++, the source code is converted into machine code by a compiler. Machine code consists of binary instructions that are directly executed by the computer\'92s CPU.\
+	\'95	
+\f0\b Performance
+\f1\b0 : This direct execution means there is no intermediate layer between the CPU and the code during runtime. This leads to faster execution because the CPU executes the instructions without needing additional interpretation or translation at runtime.\
+	\'95	
+\f0\b Optimization
+\f1\b0 : Compilers often perform various optimizations during the compilation process, improving the performance and efficiency of the resulting machine code.\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+\cf2 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f2\b\fs26 \cf2 Interpreted Languages (like Python)
+\f1\b0\fs28 \
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f0\b \cf2 Interpreted Execution
+\f1\b0 \cf2 :\
+\
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\partightenfactor0
+\cf2 	\'95	
+\f0\b Bytecode
+\f1\b0 : Interpreted languages like Python are typically not compiled into machine code. Instead, they are translated into an intermediate form called bytecode, which is then executed by an interpreter. In Python, this is done by the Python interpreter.\
+	\'95	
+\f0\b Interpreter
+\f1\b0 : The interpreter reads and executes the bytecode instructions line-by-line at runtime. This means there is an additional layer (the interpreter) between the CPU and the code.\
+	\'95	
+\f0\b Performance Overhead
+\f1\b0 : The process of interpreting bytecode instructions at runtime introduces overhead, making interpreted languages generally slower than compiled languages. The interpreter needs to translate each bytecode instruction into machine code, which adds time compared to executing pre-compiled machine code directly.\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+\cf2 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f2\b\fs26 \cf2 Key Differences
+\f1\b0\fs28 \
+\
+\pard\tqr\tx260\tx420\li420\fi-420\sl324\slmult1\partightenfactor0
+
+\f3 \cf2 	1.	
+\f0\b Execution Speed
+\f1\b0 :\
+\pard\tqr\tx500\tx660\li660\fi-660\sl324\slmult1\partightenfactor0
+\cf2 	\'95	
+\f0\b Compiled Languages
+\f1\b0 : The compiled code runs directly on the CPU, leading to high performance and speed.\
+	\'95	
+\f0\b Interpreted Languages
+\f1\b0 : The code is interpreted at runtime, which introduces a performance overhead due to the additional translation step.\
+\pard\tqr\tx260\tx420\li420\fi-420\sl324\slmult1\partightenfactor0
+
+\f3 \cf2 	2.	
+\f0\b Runtime Environment
+\f1\b0 :\
+\pard\tqr\tx500\tx660\li660\fi-660\sl324\slmult1\partightenfactor0
+\cf2 	\'95	
+\f0\b Compiled Languages
+\f1\b0 : Once compiled, the executable does not require the compiler or source code to run. The machine code is self-sufficient.\
+	\'95	
+\f0\b Interpreted Languages
+\f1\b0 : The source code or bytecode needs the interpreter to run. The interpreter acts as an intermediary, translating instructions on the fly.\
+\pard\tqr\tx260\tx420\li420\fi-420\sl324\slmult1\partightenfactor0
+
+\f3 \cf2 	3.	
+\f0\b Error Checking
+\f1\b0 :\
+\pard\tqr\tx500\tx660\li660\fi-660\sl324\slmult1\partightenfactor0
+\cf2 	\'95	
+\f0\b Compiled Languages
+\f1\b0 : Errors are detected at compile-time, before the code is executed. This allows for early detection of issues.\
+	\'95	
+\f0\b Interpreted Languages
+\f1\b0 : Errors are detected at runtime, which can sometimes make debugging more difficult as the program may run up to the point of error before failing.\
+\pard\tqr\tx260\tx420\li420\fi-420\sl324\slmult1\partightenfactor0
+
+\f3 \cf2 	4.	
+\f0\b Flexibility
+\f1\b0 :\
+\pard\tqr\tx500\tx660\li660\fi-660\sl324\slmult1\partightenfactor0
+\cf2 	\'95	
+\f0\b Compiled Languages
+\f1\b0 : Less flexible in terms of code changes and rapid prototyping since the code needs to be recompiled after changes.\
+	\'95	
+\f0\b Interpreted Languages
+\f1\b0 : More flexible and suitable for rapid development and prototyping, as changes can be tested immediately without recompilation.\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+\cf2 \
+
+\f0\b\fs30 Summary
+\f1\b0\fs28 \
+\
+Compiled languages like C++ translate source code into machine code, allowing direct execution by the CPU. This results in high performance and efficiency because there is no intermediary step during execution. Interpreted languages like Python, on the other hand, translate source code into bytecode, which is then executed by an interpreter at runtime. This additional layer introduces performance overhead but provides greater flexibility and ease of debugging during development.}
