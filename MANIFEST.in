@@ -1,5 +1,5 @@
 include README.md
 include requirements.txt
-recursive-include BrainNav/cython *.pyx *.cpp *.h
-recursive-include BrainNav/resources *
-recursive-include BrainNav/public *
+recursive-include ari-core/cython *.pyx *.cpp *.h
+recursive-include ari-core/resources *
+recursive-include ari-core/public *

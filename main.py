@@ -21,7 +21,7 @@ def main():
     qdarktheme.setup_theme("dark")
 
     # Set the window icon
-    icon_path = os.path.abspath(os.path.join(os.path.dirname(BrainNav.__file__), '..', 'public', 'logo.jpg'))
+    icon_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'public', 'logo.jpg'))
     app.setWindowIcon(QIcon(icon_path))
 
     # Create and display the splash screen
