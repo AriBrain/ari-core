@@ -497,7 +497,7 @@ class Metrics:
         Returns:
         - pandas.DataFrame: Cluster statistics including size, TDP, max Z, and coordinates.
         """
-        from analyses.hommel import pyHommel
+        from ari_application.analyses.hommel import pyHommel
 
         # Ensure Pmap, clusters, and mask are properly formatted
         # Pmap        = Metrics.get_array(Pmap)
