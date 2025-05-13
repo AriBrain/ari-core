@@ -34,8 +34,11 @@ Prerequisites
 pipx
 
 If you don’t already have pipx, install it like this:
+
 python3 -m pip install --user pipx
+
 python3 -m pipx ensurepath
+
 Then restart your shell (close and reopen Terminal, or run exec "$SHELL").
  
 2. Install ARIBrain (One-liner)
