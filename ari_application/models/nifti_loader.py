@@ -8,11 +8,10 @@ from PyQt5.QtWidgets import QInputDialog, QMessageBox
 from PyQt5.QtWidgets import QInputDialog, QMessageBox
 import pyqtgraph as pg
 import os
+
 from ari_application.orth_views.orth_view_setup import OrthViewSetup
 from ari_application.models.image_processing import ImageProcessing
-
-
-from models.image_processing import ImageProcessing
+from ari_application.models.image_processing import ImageProcessing
 
 
 
