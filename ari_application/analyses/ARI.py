@@ -13,8 +13,6 @@ from PyQt5.QtWidgets import QProgressDialog
 
 # Project-specific imports (organized by module type)
 from ari_application.models.image_processing import ImageProcessing
-from ari_application.models.metrics import Metrics
-
 from ari_application.analyses.utils import Utilities
 from ari_application.analyses.hommel import pyHommel
 from ari_application.orth_views.orth_view_setup import OrthViewSetup
