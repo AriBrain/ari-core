@@ -35,9 +35,9 @@ pipx
 
 If you don’t already have pipx, install it like this:
 
-python3 -m pip install --user pipx
+- python3 -m pip install --user pipx
 
-python3 -m pipx ensurepath
+- python3 -m pipx ensurepath
 
 Then restart your shell (close and reopen Terminal, or run exec "$SHELL").
  
@@ -45,36 +45,51 @@ Then restart your shell (close and reopen Terminal, or run exec "$SHELL").
 
 Run the following in your terminal:
 curl -sSL https://raw.githubusercontent.com/AriBrain/ari-core/main/install.sh | bash
+
 This will:
+
 •	Install pyenv (if missing)
+
 •	Install Python 3.10.14 (if missing)
+
 •	Create a dedicated environment named aribrain_venv
+
 •	Use pipx to install ARIBrain from GitHub
  
 3. Run ARIBrain
 
 After installation, simply run:
+
 aribrain
+
 This launches the application GUI.
  
 Optional: Reinstall or Clean Up
 
 If something goes wrong or you want to reset the installation:
-pipx uninstall aribrain
-rm -rf ~/.local/pipx/venvs/aribrain
-rm -rf ~/.local/bin/aribrain
-rm -rf ~/.pyenv/versions/3.10.14
+
+•	pipx uninstall aribrain
+
+•	rm -rf ~/.local/pipx/venvs/aribrain
+
+•	rm -rf ~/.local/bin/aribrain
+
+•	rm -rf ~/.pyenv/versions/3.10.14
  
-📁 Virtual Environment Location
+Virtual Environment Location
 
 The app will be installed in:
+
 ~/.local/pipx/venvs/aribrain
+
 The virtualenv uses Python 3.10.14 provided by pyenv, isolated from your system Python.
  
 Notes
+
 •	The application is fetched from the GitHub repo: https://github.com/AriBrain/ari-core
+
 •	Make sure your system has a compiler installed (e.g., Xcode Command Line Tools on macOS).
 
 ### Prerequisites
-- will be installed automatically into the venv created by pipx
+•	will be installed automatically into the venv created by pipx
 
