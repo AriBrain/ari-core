@@ -14,7 +14,7 @@ the axial, sagittal, and coronal views.
 
 from PyQt5.QtCore import QEvent, Qt, QObject
 from PyQt5.QtWidgets import QApplication, QMenu, QAction, QTableWidgetItem
-from models.metrics import Metrics
+from ari_application.models.metrics import Metrics
 
 
 class MouseInteractions(QObject):

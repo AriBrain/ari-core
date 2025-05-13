@@ -8,11 +8,9 @@ from PyQt5.QtWidgets import QInputDialog, QMessageBox
 from PyQt5.QtWidgets import QInputDialog, QMessageBox
 import pyqtgraph as pg
 import os
-from models.metrics import Metrics
-from orth_views.orth_view_setup import OrthViewSetup
-from error_handling.ErrorHandler import ErrorHandler  # Import ErrorHandler
-from models.image_processing import ImageProcessing
-from nibabel.orientations import io_orientation, ornt2axcodes, axcodes2ornt, ornt_transform, apply_orientation, inv_ornt_aff
+from ari_application.orth_views.orth_view_setup import OrthViewSetup
+from ari_application.models.image_processing import ImageProcessing
+
 
 from models.image_processing import ImageProcessing
 

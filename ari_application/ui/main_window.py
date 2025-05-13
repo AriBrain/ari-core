@@ -14,27 +14,27 @@ from PyQt5.QtWidgets import (
 
 
 # **Project-Specific Imports (Ordered by Functionality)**
-from controllers.mouse_interactions import MouseInteractions
-from models.nifti_loader import NiftiLoader
-from models.metrics import Metrics
-from models.image_processing import ImageProcessing
-from orth_views.orth_view_setup import OrthViewSetup
-from orth_views.orth_view_update import OrthViewUpdate
-from analyses.ARI import pyARI
-from resources.styles import Styles
+from ari_application.controllers.mouse_interactions import MouseInteractions
+from ari_application.models.nifti_loader import NiftiLoader
+from ari_application.models.metrics import Metrics
+from ari_application.models.image_processing import ImageProcessing
+from ari_application.orth_views.orth_view_setup import OrthViewSetup
+from ari_application.orth_views.orth_view_update import OrthViewUpdate
+from ari_application.analyses.ARI import pyARI
+from ari_application.resources.styles import Styles
 
-from ui.components.left_side_bar import LeftSideBar, StatImageItem
-from ui.components.tabs.tblARI import TblARI
-from ui.components.ui_helpers import UIHelpers
-from ui.components.upload_files import UploadFiles
-from ui.components.three_d_viewer import ThreeDViewer
-from ui.components.tabs.whole_brain_thresholding import WBTing
-from ui.components.tabs.initiate_tabs import InitiateTabs
-from ui.components.cluster_work_station import ClusterWorkStation
-from ui.components.message_box import MessageLogger
-from ui.components.orth_viewer_controls import OrthViewerControls
-from ui.components.save_and_export import SaveAndExportTab
-from ui.components.menu_bar import MenuBar
+from ari_application.ui.components.left_side_bar import LeftSideBar, StatImageItem
+from ari_application.ui.components.tabs.tblARI import TblARI
+from ari_application.ui.components.ui_helpers import UIHelpers
+from ari_application.ui.components.upload_files import UploadFiles
+from ari_application.ui.components.three_d_viewer import ThreeDViewer
+from ari_application.ui.components.tabs.whole_brain_thresholding import WBTing
+from ari_application.ui.components.tabs.initiate_tabs import InitiateTabs
+from ari_application.ui.components.cluster_work_station import ClusterWorkStation
+from ari_application.ui.components.message_box import MessageLogger
+from ari_application.ui.components.orth_viewer_controls import OrthViewerControls
+from ari_application.ui.components.save_and_export import SaveAndExportTab
+from ari_application.ui.components.menu_bar import MenuBar
 
 # from ui.start_window import StartWindow  # Import the StartWindow class
 

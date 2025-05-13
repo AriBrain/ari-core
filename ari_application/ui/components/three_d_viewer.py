@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QPushButton
 from pyvistaqt import QtInteractor
 
 # If you have your custom Styles or BrainNav modules:
-from resources.styles import Styles  # Replace with actual path
+from ari_application.resources.styles import Styles  # Replace with actual path
 
 class ThreeDViewer(QWidget):
     """

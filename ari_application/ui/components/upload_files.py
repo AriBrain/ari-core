@@ -1,6 +1,5 @@
 from PyQt5.QtWidgets import QFileDialog
-from models.nifti_loader import NiftiLoader
-from error_handling.ErrorHandler import ErrorHandler
+from ari_application.error_handling.ErrorHandler import ErrorHandler
 
 class UploadFiles:
     """

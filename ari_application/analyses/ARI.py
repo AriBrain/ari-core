@@ -12,13 +12,13 @@ from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import QProgressDialog
 
 # Project-specific imports (organized by module type)
-from models.image_processing import ImageProcessing
-from models.metrics import Metrics
+from ari_application.models.image_processing import ImageProcessing
+from ari_application.models.metrics import Metrics
 
-from analyses.utils import Utilities
-from analyses.hommel import pyHommel
-from analyses.getClusters import get_clusters
-from analyses.getAdjList import get_adjList
+from ari_application.analyses.utils import Utilities
+from ari_application.analyses.hommel import pyHommel
+from ari_application.analyses.getClusters import get_clusters
+from ari_application.analyses.getAdjList import get_adjList
 
 from orth_views.orth_view_setup import OrthViewSetup
 

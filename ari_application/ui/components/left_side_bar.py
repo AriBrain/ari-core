@@ -4,7 +4,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 
-from resources.styles import Styles  # Adjust path if needed
+from ari_application.resources.styles import Styles  # Adjust path if needed
 
 import os
 

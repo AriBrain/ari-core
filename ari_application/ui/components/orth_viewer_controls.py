@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 
-from resources.styles import Styles 
+from ari_application.resources.styles import Styles 
 
 
 class OrthViewerControls(QWidget):

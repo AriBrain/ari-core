@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 # import BrainNav.cpp_extensions.cython_modules.hommel as hommel
-import cpp_extensions.cython_modules.hommel as hommel
+import ari_application.cpp_extensions.cython_modules.hommel as hommel
 
 class pyHommel:
     def __init__(self, p, jump_alpha, sorter, adjusted, simes_factor, simes):

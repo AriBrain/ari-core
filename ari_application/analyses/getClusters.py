@@ -1,5 +1,5 @@
 import numpy as np
-import cpp_extensions.cython_modules.ARICluster as ARI_C
+import ari_application.cpp_extensions.cython_modules.ARICluster as ARI_C
 
 class get_clusters:
     """

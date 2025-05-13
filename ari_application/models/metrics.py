@@ -15,10 +15,9 @@ from PyQt5.QtWidgets import QProgressDialog
 from PyQt5.QtCore import Qt
 
 # Project-Specific Imports
-import cpp_extensions.cython_modules.ARICluster as ARI_C
-from analyses.getClusters import get_clusters
-from models.image_processing import ImageProcessing
-from orth_views.orth_view_update import OrthViewUpdate
+import ari_application.cpp_extensions.cython_modules.ARICluster as ARI_C
+from ari_application.analyses.getClusters import get_clusters
+from ari_application.models.image_processing import ImageProcessing
 
 # To do: some functions, toward the end of this class can and should be moved to util.py as they are helper functions. 
 

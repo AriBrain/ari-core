@@ -6,7 +6,7 @@ from PyQt5.QtWidgets import (
 )
 
 # === Project-Specific ===
-from resources.styles import Styles  # For button and slider styling
+from ari_application.resources.styles import Styles  # For button and slider styling
 
 class WBTing(QWidget):
     """

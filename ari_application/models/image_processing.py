@@ -9,7 +9,7 @@ from nilearn.image import new_img_like
 # import fsl.data.image as fslimage
 # import fsl.wrappers as fslwrap
 
-from error_handling.ErrorHandler import ErrorHandler  # Import ErrorHandler
+from ari_application.error_handling.ErrorHandler import ErrorHandler  # Import ErrorHandler
 # import logging
 # logging.basicConfig(filename='alignment_debug.log', level=logging.DEBUG, format='%(asctime)s %(message)s')
 
