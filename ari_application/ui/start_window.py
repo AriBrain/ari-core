@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QPushButton, QFormLayout, QHBoxLayout, 
                              QLineEdit, QComboBox, QFileDialog, QLabel,  QGridLayout, QInputDialog)
 from PyQt5.QtGui import QPalette, QBrush, QPixmap, QFont, QImage, QColor
-from PyQt5.QtCore import Qt, QFile, QTextStream
+from PyQt5.QtCore import Qt
 import os
 from ui.main_window import BrainNav
 import qdarktheme 

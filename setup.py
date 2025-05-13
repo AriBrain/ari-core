@@ -194,7 +194,7 @@ setup(
     install_requires=requirements,
     entry_points={
         'gui_scripts': [
-            'aribrain = ari_core.main:main'
+            'aribrain = ari-core.main:main'
         ]
     },
 )
