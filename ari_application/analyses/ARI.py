@@ -17,14 +17,11 @@ from ari_application.models.metrics import Metrics
 
 from ari_application.analyses.utils import Utilities
 from ari_application.analyses.hommel import pyHommel
-from ari_application.analyses.getClusters import get_clusters
-from ari_application.analyses.getAdjList import get_adjList
-
-from orth_views.orth_view_setup import OrthViewSetup
+from ari_application.orth_views.orth_view_setup import OrthViewSetup
 
 # Cython extensions
-import cpp_extensions.cython_modules.hommel as hommel
-import cpp_extensions.cython_modules.ARICluster as ARI_C
+import ari_application.cpp_extensions.cython_modules.hommel as hommel
+import ari_application.cpp_extensions.cython_modules.ARICluster as ARI_C
 
 class pyARI:
     def __init__(self, BrainNav):
