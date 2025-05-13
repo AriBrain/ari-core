@@ -181,7 +181,7 @@ extensions = [
     ),
 ]
 
-with open("requirements.text") as f:
+with open("requirements.txt") as f:
     requirements = f.read().splitlines()
 
 setup(

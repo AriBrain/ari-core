@@ -1,18 +1,8 @@
 [build-system]
 requires = [
-    "setuptools>=61",  # needed for PEP 517
+    "setuptools>=61",
     "wheel",
     "cython>=3.0",
-    "numpy>=1.22",
-    "pyqt5",
-    "pyqtgraph",
-    "pyvista",
-    "pyvistaqt",
-    "qdarktheme",
-    "python-dotenv",
-    "nibabel",
-    "pandas",
-    "scipy",
-    "nilearn"
+    "numpy>=1.22"
 ]
 build-backend = "setuptools.build_meta"
