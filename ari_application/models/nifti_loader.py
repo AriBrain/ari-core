@@ -133,11 +133,12 @@ class NiftiLoader:
         
             # Display metrics and set up the viewer
             # Metrics.show_metrics(self.brain_nav)
-            self.metrics.show_metrics()
+            if hasattr(self, 'metrics'):
+                self.metrics.show_metrics()
             OrthViewSetup(self.brain_nav).setup_viewer()
         
         except Exception as e:
-            print('error in load background image')
+            print(f'Error in load_bg: {e}')
             # error_handler.handle_exception(e)  # Use ErrorHandler to handle the exception
             return None, None
         
