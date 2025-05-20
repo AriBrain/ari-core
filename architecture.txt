@@ -1,96 +1,129 @@
-
-  BrainNav/
-├── controllers/
-│   ├── __init__.py
-│   ├── mouse_interactions.py
-├── error_handling/
-│   ├── show_error.py
-├── models/
-│   ├── __init__.py
-│   ├── metrics.py
-│   ├── nifti_loader.py
-├── orth_views/
-│   ├── __init__.py
-│   ├── orth_view_setup.py
-│   ├── orth_view_update.py
-├── resources/
-│   ├── __init__.py
-├── ui/
-│   ├── __init__.py
-│   ├── main_window.py
-│   ├── upload_dialog.py
-├── __init__.py
 ├── architecture.txt
-├── main.py
-
-
-
-main.py
-
-	•	main()
-
-ui/
-
-main_window.py
-
-	•	MainWindow.__init__(self)
-	•	MainWindow.upload_file(self)
-	•	MainWindow.update_views(self, data)
-	•	MainWindow.update_metrics(self, header)
-	•	MainWindow.reset_view(self)
-	•	MainWindow.show_error(self, message)
-
-orth_views/
-
-orth_view.py
-
-	•	OrthView.__init__(self, title)
-	•	OrthView.set_crosshair(self, position)
-	•	OrthView.add_crosshair(self)
-	•	OrthView.clear_crosshair(self)
-	•	OrthView.setup_view(self)
-
-models/
-
-nifti_loader.py
-
-	•	NiftiLoader.load(file_path)
-	•	NiftiLoader.reorient_to_ras(image, data)
-
-metrics.py
-
-	•	Metrics.extract_metrics(header, crosshair_position, data)
-
-controllers/
-
-mouse_interactions.py
-
-    •   MouseInteractions.eventFilter(self, source, event)
-	•	MouseInteractions.handle_drag(self, pos, source)
-	•	MouseInteractions.handle_zoom(self, event, source)
-	•	MouseInteractions.handle_scroll(self, event, source)
-	•	MouseInteractions.handle_pan(self, pos, source)
-	•	MouseInteractions.on_mouse_click(self, event, source)
-	•	MouseInteractions.move_crosshair_and_slices(self, pos, source)
-
-
-view_updater.py
-
-	•	ViewUpdater.update_slices(self)
-	•	ViewUpdater.update_axial_slice(self)
-	•	ViewUpdater.update_sagittal_slice(self)
-	•	ViewUpdater.update_coronal_slice(self)
-	•	ViewUpdater.set_initial_ranges(self)
-	•	ViewUpdater.get_ranges(self)
-	•	ViewUpdater.set_ranges(self)
-    •	MouseInteractions.update_crosshairs(self)
-
-resources/
-
-styles.py
-
-	•	upload_button_styling
-	•	reset_button_styling
-
-
-
+├── ari_application
+│   ├── __init__.py
+│   ├── __pycache__
+│   │   └── __init__.cpython-310.pyc
+│   ├── analyses
+│   │   ├── __init__.py
+│   │   ├── __pycache__
+│   │   │   ├── __init__.cpython-310.pyc
+│   │   │   ├── ARI.cpython-310.pyc
+│   │   │   ├── getAdjList.cpython-310.pyc
+│   │   │   ├── getClusters.cpython-310.pyc
+│   │   │   ├── hommel.cpython-310.pyc
+│   │   │   ├── pyARI.cpython-310.pyc
+│   │   │   └── utils.cpython-310.pyc
+│   │   ├── ARI.py
+│   │   ├── getAdjList.py
+│   │   ├── getClusters.py
+│   │   ├── hommel_backup.cpp
+│   │   ├── hommel_helpers.py
+│   │   ├── hommel.py
+│   │   └── utils.py
+│   ├── build
+│   ├── controllers
+│   │   ├── __init__.py
+│   │   ├── __pycache__
+│   │   │   ├── __init__.cpython-310.pyc
+│   │   │   └── mouse_interactions.cpython-310.pyc
+│   │   └── mouse_interactions.py
+│   ├── cpp_extensions
+│   │   ├── __init__.py
+│   │   ├── __pycache__
+│   │   │   └── __init__.cpython-310.pyc
+│   │   ├── cpp_sources
+│   │   │   ├── __init__.py
+│   │   │   ├── ARICluster_zeroBased.cpp
+│   │   │   ├── ARICluster.cpp
+│   │   │   ├── ARICluster.h
+│   │   │   ├── hommel_zero_based.cpp
+│   │   │   ├── hommel.cpp
+│   │   │   └── hommel.h
+│   │   ├── cython_modules
+│   │   │   ├── __init__.py
+│   │   │   ├── __pycache__
+│   │   │   ├── ARICluster.pyx
+│   │   │   ├── hommel.pyx
+│   │   │   └── test_hommel.py
+│   │   └── info
+│   │       ├── Compiling with Cython.rtf
+│   │       └── compiling_theory.rtf
+│   ├── error_handling
+│   │   ├── __init__.py
+│   │   ├── __pycache__
+│   │   └── ErrorHandler.py
+│   ├── main.py
+│   ├── models
+│   │   ├── __init__.py
+│   │   ├── __pycache__
+│   │   │   ├── __init__.cpython-310.pyc
+│   │   │   ├── image_processing.cpython-310.pyc
+│   │   │   ├── metrics.cpython-310.pyc
+│   │   │   └── nifti_loader.cpython-310.pyc
+│   │   ├── image_processing.py
+│   │   ├── metrics.py
+│   │   └── nifti_loader.py
+│   ├── orth_views
+│   │   ├── __init__.py
+│   │   ├── __pycache__
+│   │   │   ├── __init__.cpython-310.pyc
+│   │   │   ├── orth_view_setup.cpython-310.pyc
+│   │   │   └── orth_view_update.cpython-310.pyc
+│   │   ├── orth_view_setup.py
+│   │   └── orth_view_update.py
+│   ├── public
+│   │   ├── atlases
+│   │   │   ├── AAL2
+│   │   │   ├── HCP-MMP1_onMNI152_2mm_Glasser360.nii
+│   │   │   ├── OASIS-TRT-20_jointfusion_DKT31_CMA_label_probabilities_in_MNI152_v2.nii
+│   │   │   ├── OASIS-TRT-20_jointfusion_DKT31_CMA_label_probabilities_in_MNI152_v2.nii.gz
+│   │   │   └── OASIS-TRT-20_jointfusion_DKT31_CMA_labels_in_MNI152_2mm_v2.nii.gz
+│   │   ├── logo_bw.png
+│   │   ├── logo.jpg
+│   │   ├── template_masks
+│   │   │   └── mni_template_icbm152_inmask.nii
+│   │   └── templates
+│   │       ├── mni_icbm152_gm.nii
+│   │       ├── mni_icbm152_t1.nii
+│   │       └── mni152.nii
+│   ├── resources
+│   │   ├── __init__.py
+│   │   ├── __pycache__
+│   │   │   ├── __init__.cpython-310.pyc
+│   │   │   └── styles.cpython-310.pyc
+│   │   └── styles.py
+│   ├── temp
+│   └── ui
+│       ├── __init__.py
+│       ├── __pycache__
+│       │   ├── __init__.cpython-310.pyc
+│       │   ├── main_window.cpython-310.pyc
+│       │   ├── splash_screen.cpython-310.pyc
+│       │   ├── start_window.cpython-310.pyc
+│       │   └── upload_files.cpython-310.pyc
+│       ├── components
+│       │   ├── __init__.py
+│       │   ├── __pycache__
+│       │   ├── cluster_work_station.py
+│       │   ├── histogram.py
+│       │   ├── left_side_bar.py
+│       │   ├── menu_bar.py
+│       │   ├── message_box.py
+│       │   ├── orth_viewer_controls.py
+│       │   ├── save_and_export.py
+│       │   ├── tabs
+│       │   ├── three_d_viewer.py
+│       │   ├── ui_helpers.py
+│       │   └── upload_files.py
+│       ├── main_window.py
+│       ├── splash_screen.py
+│       └── start_window.py
+├── ARIBrain Installation Guide.docx
+├── CONTRIBUTING.md
+├── install.sh
+├── installation.txt
+├── MANIFEST.in
+├── pyproject.toml
+├── README.md
+├── requirements.txt
+└── setup.py
