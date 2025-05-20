@@ -22,7 +22,7 @@ export PIPX_DEFAULT_PYTHON="$(pyenv root)/versions/3.10.14/bin/python3.10"
 echo "Installing ARIBrain using pipx with Python 3.10.14..."
 pipx install --python "$PIPX_DEFAULT_PYTHON" git+https://github.com/AriBrain/ari-core.git
 
-#!/bin/bash
+## !/bin/bash
 
 # set -e  # Exit on error
 
