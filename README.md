@@ -54,7 +54,7 @@ This will:
 
 - Install pyenv (if missing)
 - Install Python 3.10.14 (if missing)
-- Create a dedicated environment named `aribrain_venv`
+- Create a dedicated environment (`aribrain`) in: ` ~/.local/pipx/venvs/aribrain`
 - Use pipx to install ARIBrain from GitHub
 
 ### 3. Run ARIBrain
