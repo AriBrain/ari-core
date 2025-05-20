@@ -1,0 +1,46 @@
+# macOS system files
+.DS_Store
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+.venv/
+env/
+venv/
+aribrain_venv/
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Cython build artifacts
+*.c
+*.cpp
+*.so
+*.pyd
+*.pyx.c
+*.pyx.cpp
+build/
+dist/
+*.egg-info/
+
+# PyInstaller output
+*.spec
+
+# Jupyter notebooks (optional)
+.ipynb_checkpoints/
+
+# VSCode settings (optional)
+.vscode/
+
+# OS backup files
+*~
+*.swp
+*.bak
+*.tmp
+
+# ARIBrain specific files
+*.ari
