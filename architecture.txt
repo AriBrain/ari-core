@@ -1,36 +1,19 @@
-├── architecture.txt
 ├── ari_application
 │   ├── __init__.py
-│   ├── __pycache__
-│   │   └── __init__.cpython-310.pyc
 │   ├── analyses
 │   │   ├── __init__.py
-│   │   ├── __pycache__
-│   │   │   ├── __init__.cpython-310.pyc
-│   │   │   ├── ARI.cpython-310.pyc
-│   │   │   ├── getAdjList.cpython-310.pyc
-│   │   │   ├── getClusters.cpython-310.pyc
-│   │   │   ├── hommel.cpython-310.pyc
-│   │   │   ├── pyARI.cpython-310.pyc
-│   │   │   └── utils.cpython-310.pyc
 │   │   ├── ARI.py
 │   │   ├── getAdjList.py
 │   │   ├── getClusters.py
-│   │   ├── hommel_backup.cpp
 │   │   ├── hommel_helpers.py
 │   │   ├── hommel.py
 │   │   └── utils.py
 │   ├── build
 │   ├── controllers
 │   │   ├── __init__.py
-│   │   ├── __pycache__
-│   │   │   ├── __init__.cpython-310.pyc
-│   │   │   └── mouse_interactions.cpython-310.pyc
 │   │   └── mouse_interactions.py
 │   ├── cpp_extensions
 │   │   ├── __init__.py
-│   │   ├── __pycache__
-│   │   │   └── __init__.cpython-310.pyc
 │   │   ├── cpp_sources
 │   │   │   ├── __init__.py
 │   │   │   ├── ARICluster_zeroBased.cpp
@@ -41,7 +24,6 @@
 │   │   │   └── hommel.h
 │   │   ├── cython_modules
 │   │   │   ├── __init__.py
-│   │   │   ├── __pycache__
 │   │   │   ├── ARICluster.pyx
 │   │   │   ├── hommel.pyx
 │   │   │   └── test_hommel.py
@@ -50,34 +32,27 @@
 │   │       └── compiling_theory.rtf
 │   ├── error_handling
 │   │   ├── __init__.py
-│   │   ├── __pycache__
 │   │   └── ErrorHandler.py
 │   ├── main.py
 │   ├── models
 │   │   ├── __init__.py
-│   │   ├── __pycache__
-│   │   │   ├── __init__.cpython-310.pyc
-│   │   │   ├── image_processing.cpython-310.pyc
-│   │   │   ├── metrics.cpython-310.pyc
-│   │   │   └── nifti_loader.cpython-310.pyc
 │   │   ├── image_processing.py
 │   │   ├── metrics.py
 │   │   └── nifti_loader.py
 │   ├── orth_views
 │   │   ├── __init__.py
-│   │   ├── __pycache__
-│   │   │   ├── __init__.cpython-310.pyc
-│   │   │   ├── orth_view_setup.cpython-310.pyc
-│   │   │   └── orth_view_update.cpython-310.pyc
 │   │   ├── orth_view_setup.py
 │   │   └── orth_view_update.py
 │   ├── public
+│   │   ├── ARIBrain Installation Guide.docx
 │   │   ├── atlases
 │   │   │   ├── AAL2
 │   │   │   ├── HCP-MMP1_onMNI152_2mm_Glasser360.nii
 │   │   │   ├── OASIS-TRT-20_jointfusion_DKT31_CMA_label_probabilities_in_MNI152_v2.nii
 │   │   │   ├── OASIS-TRT-20_jointfusion_DKT31_CMA_label_probabilities_in_MNI152_v2.nii.gz
 │   │   │   └── OASIS-TRT-20_jointfusion_DKT31_CMA_labels_in_MNI152_2mm_v2.nii.gz
+│   │   ├── demo_data
+│   │   │   └── z.nii
 │   │   ├── logo_bw.png
 │   │   ├── logo.jpg
 │   │   ├── template_masks
@@ -88,22 +63,12 @@
 │   │       └── mni152.nii
 │   ├── resources
 │   │   ├── __init__.py
-│   │   ├── __pycache__
-│   │   │   ├── __init__.cpython-310.pyc
-│   │   │   └── styles.cpython-310.pyc
 │   │   └── styles.py
 │   ├── temp
 │   └── ui
 │       ├── __init__.py
-│       ├── __pycache__
-│       │   ├── __init__.cpython-310.pyc
-│       │   ├── main_window.cpython-310.pyc
-│       │   ├── splash_screen.cpython-310.pyc
-│       │   ├── start_window.cpython-310.pyc
-│       │   └── upload_files.cpython-310.pyc
 │       ├── components
 │       │   ├── __init__.py
-│       │   ├── __pycache__
 │       │   ├── cluster_work_station.py
 │       │   ├── histogram.py
 │       │   ├── left_side_bar.py
@@ -118,10 +83,8 @@
 │       ├── main_window.py
 │       ├── splash_screen.py
 │       └── start_window.py
-├── ARIBrain Installation Guide.docx
 ├── CONTRIBUTING.md
 ├── install.sh
-├── installation.txt
 ├── MANIFEST.in
 ├── pyproject.toml
 ├── README.md
