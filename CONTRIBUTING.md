@@ -61,7 +61,7 @@ This repository is actively maintained by the ARIBrain development team. If you 
 
 ---
 
-### 🔄 Staying Updated
+### Staying Updated
 
 To keep your local fork up to date:
 ```bash
