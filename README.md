@@ -19,6 +19,7 @@ ARIbrain is an advanced neuroimaging application designed to enhance the spatial
 Traditional cluster-wise inference methods in fMRI often suffer from the “spatial specificity paradox,” where larger clusters may be statistically significant but contain a low proportion of truly active voxels. ARIbrain addresses this issue by providing a rigorous statistical framework to estimate the TDP within clusters, enhancing the reliability and interpretability of neuroimaging results.
 
 ---
+---
 
 ## Installation
 
@@ -100,6 +101,8 @@ The virtualenv uses Python 3.10.14 provided by pyenv, isolated from your system 
 - Will be installed automatically into the venv created by pipx
 
 
+---
+---
 
 ## Contributing to ARIBrain (Internal Team)
 
