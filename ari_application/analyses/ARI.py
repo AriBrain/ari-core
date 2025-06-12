@@ -324,6 +324,11 @@ class pyARI:
             masked_zscores = self.fileInfo[file_nr]['data'][mask_data  != 0]
             z_max = round(np.max(masked_zscores), 2)
 
+        elif self.fileInfo[file_nr]['type'] == "t":
+            # For t-scores: find max t-score within mask
+            masked_zscores = self.fileInfo[file_nr]['data'][mask_data  != 0]
+            z_max = round(np.max(masked_zscores), 2)
+
         # Optionally, if we want to store or log this, 
         self.fileInfo[file_nr]['zmin'] = zmin
         self.fileInfo[file_nr]['zmax'] = z_max
