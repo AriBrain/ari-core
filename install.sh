@@ -21,7 +21,7 @@ export PIPX_DEFAULT_PYTHON="$(pyenv root)/versions/3.10.14/bin/python3.10"
 # Step 4: Use pipx to install
 echo "Installing ARIBrain using pipx with Python 3.10.14..."
 #pipx install --python "$PIPX_DEFAULT_PYTHON" git+https://github.com/AriBrain/ari-core.git
-pipx install --python "$PIPX_DEFAULT_PYTHON" 'git+https://github.com/wdweeda/ari-core.git@feat/tmapfix'
+pipx install --python --force "$PIPX_DEFAULT_PYTHON" 'git+https://github.com/wdweeda/ari-core.git@feat/tmapfix'
 
 ## !/bin/bash
 
