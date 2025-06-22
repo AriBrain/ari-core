@@ -1,16 +1,51 @@
 <#
 .SYNOPSIS
-    This script automatically installs pyenv-win if needed, ensures Python 3.10.14
-    is installed, and then installs the ARIBrain package in an isolated
-    environment using pipx.
+    This script automatically installs all necessary prerequisites (C++ Build Tools,
+    pyenv-win, Python 3.10.11) and then installs the ARIBrain package.
 .DESCRIPTION
-    1.  Checks if pyenv-win is installed. If not, it automatically downloads,
-        installs, and configures it for the current session.
-    2.  Attempts to install Python 3.10.14. If it fails because definitions
-        are missing, it updates the definitions and retries the install.
-    3.  Uses pipx to install ARIBrain from its git repository, forcing it to use
-        the isolated Python 3.10.14 interpreter.
+    0.  Checks if the "Desktop development with C++" workload is installed,
+        and if not, automatically downloads and installs it.
+    1.  Checks if pyenv-win is installed and installs it if absent.
+    2.  Installs Python 3.10.11, updating definitions and retrying if needed.
+    3.  Installs the ARIBrain package using pipx.
 #>
+
+# Step 0: Check for and automatically install C++ Build Tools
+Write-Host "Step 0: Checking for C++ Build Tools..."
+# The required workload for compiling Python extensions.
+$requiredWorkload = "Microsoft.VisualStudio.Workload.NativeDesktop"
+
+# Use vswhere, the official tool for finding Visual Studio installations.
+$vswherePath = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+$workloadInstalled = $false
+if (Test-Path $vswherePath) {
+    $vs_instance = & $vswherePath -products * -requires $requiredWorkload -latest
+    if ($vs_instance) {
+        $workloadInstalled = $true
+    }
+}
+
+if ($workloadInstalled) {
+    Write-Host "C++ Build Tools (Desktop development) are already installed."
+} else {
+    Write-Host "C++ Build Tools not found. Installing automatically..." -ForegroundColor Yellow
+    Write-Host "This is a large download from Microsoft and may take a significant amount of time."
+
+    # Download the Visual Studio Installer bootstrapper.
+    $vsInstallerUrl = "https://aka.ms/vs/17/release/vs_BuildTools.exe"
+    $vsInstallerPath = ".\vs_BuildTools.exe"
+    Invoke-WebRequest -Uri $vsInstallerUrl -OutFile $vsInstallerPath
+
+    # Run the installer silently from the command line.
+    # It will add the required C++ workload and include recommended components.
+    # The '--wait' flag ensures the script pauses until the installation is complete.
+    $arguments = "--quiet --wait --norestart --nocache --add $requiredWorkload --includeRecommended"
+    Start-Process -FilePath $vsInstallerPath -ArgumentList $arguments -Wait -Verb RunAs
+
+    Write-Host "C++ Build Tools installation complete." -ForegroundColor Green
+    Remove-Item $vsInstallerPath
+}
+
 
 # Step 1: Check for and automatically install pyenv-win
 Write-Host "Step 1: Checking for pyenv-win..."
@@ -55,7 +90,7 @@ if ($installedVersions -match $pythonVersion) {
     # We capture all output streams (Success, Error, etc.) to check for the specific error.
     $installOutput = pyenv install $pythonVersion 2>&1
 
-    # [NEW] If the install fails with "definition not found", update and retry.
+    # If the install fails with "definition not found", update and retry.
     if ($installOutput -match "definition not found") {
         Write-Host "Definition not found. Updating pyenv-win definitions and retrying..." -ForegroundColor Yellow
         pyenv update
