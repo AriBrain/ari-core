@@ -190,7 +190,7 @@ setup(
     packages=find_packages(),
     ext_modules=cythonize(extensions),
     include_dirs=[np.get_include()],
-    python_requires=">=3.10.11,<=3.10.14"
+    python_requires=">=3.10.11,<=3.10.14",
     install_requires=requirements,
     entry_points={
         'gui_scripts': [
