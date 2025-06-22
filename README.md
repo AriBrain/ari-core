@@ -189,7 +189,9 @@ To uninstall ARIBrain:
 
 ```bash
 pipx uninstall aribrain
-```
+Remove-Item -Path "$env:USERPROFILE\.local\pipx\venvs\aribrain" -Recurse -Force
+Remove-Item -Path "$env:USERPROFILE\.local\bin\aribrain" -Recurse -Force
+Remove-Item -Path "$env:USERPROFILE\.pyenv\pyenv-win\versions\3.10.11" -Recurse -Force
 
 ---
 ---

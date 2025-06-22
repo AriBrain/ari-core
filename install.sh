@@ -63,13 +63,16 @@ fi
 
 # Step 1: Check or install pyenv
 # =========================================================
-if ! command -v pyenv &> /dev/null; then
-  echo "Installing pyenv..."
-  # Use a non-interactive install if possible
+if [ ! -d "$HOME/.pyenv" ]; then
+  echo "pyenv installation not found. Installing pyenv..."
+  # Use a non-interactive install
   curl https://pyenv.run | bash
+else
+  echo "pyenv is already installed."
 fi
 
-# Add pyenv to PATH and initialize it for the current session
+# Add pyenv to PATH and initialize it for the current script session,
+# regardless of whether it was just installed or already present.
 export PATH="$HOME/.pyenv/bin:$PATH"
 eval "$(pyenv init --path)"
 eval "$(pyenv init -)"
