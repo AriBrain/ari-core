@@ -6,8 +6,10 @@
 .DESCRIPTION
     1.  Checks if pyenv-win is installed. If not, it automatically downloads,
         installs, and configures it for the current session.
-    2.  Checks if Python 3.10.14 is already installed by pyenv-win. If not, it installs it.
-    3.  Uses pipx to install ARIBrain from its git repository, forcing it to use
+    2.  Updates pyenv-win's list of available Python versions.
+    3.  Checks if Python 3.10.14 is already installed. If not, it installs it
+        and verifies the installation was successful.
+    4.  Uses pipx to install ARIBrain from its git repository, forcing it to use
         the isolated Python 3.10.14 interpreter.
 #>
 
@@ -25,35 +27,31 @@ if (-not (Get-Command pyenv -ErrorAction SilentlyContinue)) {
 
     # The installer modifies User-level environment variables, but these changes
     # are not reflected in the current session. We must manually update them.
-
-    # 1. Get the newly set environment variables from the User scope (where pyenv-win saves them)
-    $pyenvRoot = [System.Environment]::GetEnvironmentVariable('PYENV_ROOT', 'User')
-    $pyenvHome = [System.Environment]::GetEnvironmentVariable('PYENV_HOME', 'User')
-    $userPath = [System.Environment]::GetEnvironmentVariable('Path', 'User')
-
-    # 2. Set the variables for the current process/session
-    $env:PYENV_ROOT = $pyenvRoot
-    $env:PYENV_HOME = $pyenvHome
+    $env:PYENV_ROOT = [System.Environment]::GetEnvironmentVariable('PYENV_ROOT', 'User')
+    $env:PYENV_HOME = [System.Environment]::GetEnvironmentVariable('PYENV_HOME', 'User')
     
-    # 3. Prepend the pyenv paths to the current session's PATH variable
-    # This mimics what a new terminal session would have.
-    $pyenvBinPath = Join-Path -Path $pyenvHome -ChildPath "bin"
-    $pyenvShimsPath = Join-Path -Path $pyenvHome -ChildPath "shims"
+    # Prepend the pyenv paths to the current session's PATH variable
+    $pyenvBinPath = Join-Path -Path $env:PYENV_HOME -ChildPath "bin"
+    $pyenvShimsPath = Join-Path -Path $env:PYENV_HOME -ChildPath "shims"
     $env:Path = "$pyenvBinPath;$pyenvShimsPath;" + $env:Path
 
     Write-Host "Environment refreshed. pyenv command is now available." -ForegroundColor Green
 
-    # 4. Clean up the downloaded installer
+    # Clean up the downloaded installer
     Remove-Item $installerPath
 } else {
     Write-Host "pyenv-win is already installed."
 }
 
-# Step 2: Install Python 3.10.14 if not already installed
+# Step 2: Update definitions and install Python if needed
 $pythonVersion = "3.10.14"
 Write-Host "Step 2: Verifying Python $pythonVersion installation..."
 
-# 'pyenv versions' lists all installed versions. We check if our target version is in the list.
+# [NEW] Update pyenv-win's list of available python versions to prevent "definition not found" errors.
+Write-Host "Updating pyenv-win version definitions..."
+pyenv update
+
+# Check if the target version is already installed
 $installedVersions = pyenv versions
 if ($installedVersions -match $pythonVersion) {
     Write-Host "Python $pythonVersion is already installed via pyenv-win."
@@ -61,17 +59,24 @@ if ($installedVersions -match $pythonVersion) {
     Write-Host "Installing Python $pythonVersion via pyenv-win... (This may take a few minutes)"
     # Install the desired python version
     pyenv install $pythonVersion
+    
     # After installing a new version of Python, pyenv-win requires a 'rehash'
-    # to create the necessary shims (links) for the new Python executables.
     pyenv rehash
-    Write-Host "Python $pythonVersion has been installed."
+    
+    # [IMPROVED] Verify that the installation was actually successful before proceeding.
+    $recheckVersions = pyenv versions
+    if ($recheckVersions -match $pythonVersion) {
+        Write-Host "Python $pythonVersion has been installed successfully." -ForegroundColor Green
+    } else {
+        Write-Error "Failed to install Python $pythonVersion. Please run 'pyenv install $pythonVersion' manually to see the underlying error."
+        exit 1 # Exit the script because subsequent steps would fail.
+    }
 }
 
 # Step 3 & 4: Use pipx to install ARIBrain in an isolated environment
 Write-Host "Step 3 & 4: Installing ARIBrain using pipx with Python $pythonVersion..."
 
 # Construct the full path to the python.exe interpreter managed by pyenv-win.
-# Use the environment variable that we either found or set earlier.
 $pythonPath = Join-Path -Path $env:PYENV_ROOT -ChildPath "versions\$pythonVersion\python.exe"
 
 # Verify the Python executable exists before trying to use it.
@@ -82,8 +87,7 @@ if (-not (Test-Path $pythonPath)) {
 
 Write-Host "Using Python interpreter at: $pythonPath"
 
-# Use pipx to install the package. The --python flag tells pipx which interpreter
-# to use for creating the package's isolated virtual environment.
+# Use pipx to install the package.
 pipx install --python $pythonPath git+https://github.com/AriBrain/ari-core.git
 
 Write-Host "Installation complete." -ForegroundColor Green
