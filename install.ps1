@@ -43,7 +43,7 @@ if (-not (Get-Command pyenv -ErrorAction SilentlyContinue)) {
 }
 
 # Step 2: Install Python if needed, with automatic retry
-$pythonVersion = "3.10.14"
+$pythonVersion = "3.10.11"
 Write-Host "Step 2: Verifying Python $pythonVersion installation..."
 
 $installedVersions = pyenv versions
