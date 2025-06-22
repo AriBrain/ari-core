@@ -27,6 +27,8 @@ Traditional cluster-wise inference methods in fMRI often suffer from the “spat
 
 This guide provides platform-specific instructions for installing ARIBrain desktop application using pipx. The installer automatically sets up Python 3.10.X, creates a virtual environment, and compiles C++ extensions. Works on macOS and Linux.
 
+---
+
 ### macOS & Linux
 The installation script automates the setup of Python, dependencies, and C++ extensions.
 
