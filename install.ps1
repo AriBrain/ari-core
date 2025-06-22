@@ -6,10 +6,9 @@
 .DESCRIPTION
     1.  Checks if pyenv-win is installed. If not, it automatically downloads,
         installs, and configures it for the current session.
-    2.  Updates pyenv-win's list of available Python versions.
-    3.  Checks if Python 3.10.14 is already installed. If not, it installs it
-        and verifies the installation was successful.
-    4.  Uses pipx to install ARIBrain from its git repository, forcing it to use
+    2.  Attempts to install Python 3.10.14. If it fails because definitions
+        are missing, it updates the definitions and retries the install.
+    3.  Uses pipx to install ARIBrain from its git repository, forcing it to use
         the isolated Python 3.10.14 interpreter.
 #>
 
@@ -43,32 +42,36 @@ if (-not (Get-Command pyenv -ErrorAction SilentlyContinue)) {
     Write-Host "pyenv-win is already installed."
 }
 
-# Step 2: Update definitions and install Python if needed
+# Step 2: Install Python if needed, with automatic retry
 $pythonVersion = "3.10.14"
 Write-Host "Step 2: Verifying Python $pythonVersion installation..."
 
-# [NEW] Update pyenv-win's list of available python versions to prevent "definition not found" errors.
-Write-Host "Updating pyenv-win version definitions..."
-pyenv update
-
-# Check if the target version is already installed
 $installedVersions = pyenv versions
 if ($installedVersions -match $pythonVersion) {
     Write-Host "Python $pythonVersion is already installed via pyenv-win."
 } else {
-    Write-Host "Installing Python $pythonVersion via pyenv-win... (This may take a few minutes)"
-    # Install the desired python version
-    pyenv install $pythonVersion
+    Write-Host "Attempting to install Python $pythonVersion..."
+    # Try to install the version directly.
+    # We capture all output streams (Success, Error, etc.) to check for the specific error.
+    $installOutput = pyenv install $pythonVersion 2>&1
+
+    # [NEW] If the install fails with "definition not found", update and retry.
+    if ($installOutput -match "definition not found") {
+        Write-Host "Definition not found. Updating pyenv-win definitions and retrying..." -ForegroundColor Yellow
+        pyenv update
+        Write-Host "Retrying installation of Python $pythonVersion..."
+        pyenv install $pythonVersion
+    }
     
-    # After installing a new version of Python, pyenv-win requires a 'rehash'
+    # After installing, pyenv-win requires a 'rehash'
     pyenv rehash
     
-    # [IMPROVED] Verify that the installation was actually successful before proceeding.
+    # Verify that the installation was actually successful before proceeding.
     $recheckVersions = pyenv versions
     if ($recheckVersions -match $pythonVersion) {
         Write-Host "Python $pythonVersion has been installed successfully." -ForegroundColor Green
     } else {
-        Write-Error "Failed to install Python $pythonVersion. Please run 'pyenv install $pythonVersion' manually to see the underlying error."
+        Write-Error "Failed to install Python $pythonVersion. Please review the output above for errors from pyenv."
         exit 1 # Exit the script because subsequent steps would fail.
     }
 }
