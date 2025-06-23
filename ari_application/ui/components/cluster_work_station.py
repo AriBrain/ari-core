@@ -239,7 +239,7 @@ class ClusterWorkStation(QWidget):
         print("[DEBUG] update_tdp_from_text method called.") 
 
         try:
-            new_tdp = float(self.tdp_textbox.text())
+            new_tdp = round(float(self.tdp_textbox.text()))
             self.set_tdp(new_tdp)
         except ValueError:
             print("[DEBUG]")
