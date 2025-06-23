@@ -736,7 +736,7 @@ class Metrics:
         lm_ids_df = self.brain_nav.fileInfo[file_nr]['stable_LM_ids_df']
 
         # Handle the case where no clusters are found
-        if n == 0:
+        if clusterlist is None or len(clusterlist) == 0:
             # Show a modal dialog to the user if no clusters were formed with the current threshold
             self.show_modal_dialog(
                 "No clusters",
