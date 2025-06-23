@@ -728,8 +728,6 @@ class Metrics:
             pd.DataFrame: The tblARI DataFrame with cluster statistics, including cluster size,
                         TDP values, and the voxel/MNI coordinates of the maxima.
         """
-        # Get the number of clusters from the provided cluster list
-        n = len(clusterlist)
 
         file_nr = self.brain_nav.file_nr
         file_nr_template = self.brain_nav.file_nr_template
@@ -743,9 +741,11 @@ class Metrics:
                 "No clusters can be formed with the given TDP threshold. Please reduce the threshold."
             )
             return
-
+        # Get the number of clusters from the provided cluster list
+        n = len(clusterlist)
+        
         # If more than one cluster is found, proceed to sort the clusters by size
-        elif n > 1:
+        if n > 1:
             # Calculate the size of each cluster
             cluster_sizes = [len(cluster) for cluster in clusterlist]
 
