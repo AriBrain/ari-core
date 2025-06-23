@@ -1162,18 +1162,41 @@ class Metrics:
             file_info['step'] = len(file_info['clusterlist_history']) - 1
 
             # Print the information 
+            # print('cluster_history n:', len(file_info['clusterlist_history']))
+            # print('step:', file_info['step'])
+            # print(" ")
+            # print('cluster_label_history:', file_info['cluster_label_history'])
+            # print('xyz_history:', file_info['xyz_history'])
+            # print(" ")
+
+            # message = (
+            # f"Cluster History: n = {len(file_info['clusterlist_history'])}<br>"
+            # f"Step: {file_info['step']}<br><br>"
+            # f"Cluster Label History: {file_info['cluster_label_history']}<br>"
+            # f"XYZ History: {file_info['xyz_history']}<br><br>"
+            # )
             print('cluster_history n:', len(file_info['clusterlist_history']))
             print('step:', file_info['step'])
             print(" ")
-            print('cluster_label_history:', file_info['cluster_label_history'])
-            print('xyz_history:', file_info['xyz_history'])
+            # Format cluster_label_history to show integers only
+            formatted_cluster_labels = [int(label) for label in file_info['cluster_label_history']]
+            print('cluster_label_history:', formatted_cluster_labels)
+            # Format xyz_history to show integers only
+            formatted_xyz_history = [tuple(int(coord) for coord in xyz) for xyz in file_info['xyz_history']]
+            print('xyz_history:', formatted_xyz_history)
             print(" ")
-
+            
+            # message = (
+            #     f"Cluster History: n = {len(file_info['clusterlist_history'])}<br>"
+            #     f"Step: {file_info['step']}<br><br>"
+            #     f"Cluster Label History: {file_info['cluster_label_history']}<br>"
+            #     f"XYZ History: {file_info['xyz_history']}<br><br>"
+            # )
             message = (
-            f"Cluster History: n = {len(file_info['clusterlist_history'])}<br>"
-            f"Step: {file_info['step']}<br><br>"
-            f"Cluster Label History: {file_info['cluster_label_history']}<br>"
-            f"XYZ History: {file_info['xyz_history']}<br><br>"
+                f"Cluster History: n = {len(file_info['clusterlist_history'])}<br>"
+                f"Step: {file_info['step']}<br><br>"
+                f"Cluster Label History: {formatted_cluster_labels}<br>"
+                f"XYZ History: {formatted_xyz_history}<br><br>"
             )
             self.brain_nav.message_box.log_message(message)
                                 
@@ -1281,11 +1304,17 @@ class Metrics:
         print('xyz_history:', formatted_xyz_history)
         print(" ")
         
+        # message = (
+        #     f"Cluster History: n = {len(file_info['clusterlist_history'])}<br>"
+        #     f"Step: {file_info['step']}<br><br>"
+        #     f"Cluster Label History: {file_info['cluster_label_history']}<br>"
+        #     f"XYZ History: {file_info['xyz_history']}<br><br>"
+        # )
         message = (
             f"Cluster History: n = {len(file_info['clusterlist_history'])}<br>"
             f"Step: {file_info['step']}<br><br>"
-            f"Cluster Label History: {file_info['cluster_label_history']}<br>"
-            f"XYZ History: {file_info['xyz_history']}<br><br>"
+            f"Cluster Label History: {formatted_cluster_labels}<br>"
+            f"XYZ History: {formatted_xyz_history}<br><br>"
         )
         self.brain_nav.message_box.log_message(message)
 
