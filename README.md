@@ -119,7 +119,7 @@ Before running the main installer, a few tools are needed. The following steps w
 - Go to https://www.python.org/downloads/windows to download and run the installer.
 - **Important**: Check the box for **"Add python.exe to PATH"** during installation.
 
-#### Install Git
+#### Install Git (if not already on your system)
 
 Open PowerShell and run the following command:
 
@@ -127,7 +127,7 @@ Open PowerShell and run the following command:
 winget install --id Git.Git -e --source winget
 ```
 
-#### Install pipx
+#### Install pipx (if not already on your system)
 
 Open a new PowerShell terminal, then run:
 

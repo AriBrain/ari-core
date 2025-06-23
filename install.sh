@@ -167,11 +167,13 @@ PYTHON_VERSION="3.10.14" # Define version for easy updates
 if ! pyenv versions --bare | grep -q "^${PYTHON_VERSION}$"; then
   echo "Installing Python ${PYTHON_VERSION} via pyenv... (This may take several minutes)"
   # Set environment variables for pyenv to find Homebrew-installed libraries on macOS
-  if [[ "$(uname)" == "Darwin" ]]; then
-      export LDFLAGS="-L$(brew --prefix openssl)/lib -L$(brew --prefix readline)/lib -L$(brew --prefix zlib)/lib -L$(brew --prefix bzip2)/lib"
-      export CPPFLAGS="-I$(brew --prefix openssl)/include -I$(brew --prefix readline)/include -I$(brew --prefix zlib)/include -I$(brew --prefix bzip2)/include"
-  fi
-  pyenv install "${PYTHON_VERSION}"
+# Set environment variables for pyenv to find Homebrew-installed libraries on macOS
+if [[ "$(uname)" == "Darwin" ]]; then
+    echo "Configuring build environment for macOS..."
+    export LDFLAGS="-L$(brew --prefix openssl)/lib -L$(brew --prefix readline)/lib -L$(brew --prefix zlib)/lib -L$(brew --prefix bzip2)/lib -L$(brew --prefix xz)/lib"
+    export CPPFLAGS="-I$(brew --prefix openssl)/include -I$(brew --prefix readline)/include -I$(brew --prefix zlib)/include -I$(brew --prefix bzip2)/include -I$(brew --prefix xz)/include"
+fi
+pyenv install "${PYTHON_VERSION}"
 else
     echo "Python ${PYTHON_VERSION} is already installed."
 fi
