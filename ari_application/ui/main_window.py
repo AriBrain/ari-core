@@ -218,11 +218,6 @@ class BrainNav(QMainWindow):
                 self.left_side_bar.template_list.addItem(name)
             self.left_side_bar.template_list.setCurrentRow(self.file_nr_template)
 
-        # show default metrics
-        self.metrics.show_metrics()
-
- 
-
         # === Set Window Properties === #
         self.setWindowTitle("ARIBrain")
         screen_resolution = QDesktopWidget().screenGeometry()
@@ -268,7 +263,8 @@ class BrainNav(QMainWindow):
             self.metrics.show_metrics()
             self.orth_view_setup.setup_viewer()
   
-
+        # show default metrics
+        self.metrics.show_metrics()
 
 
     def init_panes(self):
