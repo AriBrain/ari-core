@@ -322,22 +322,20 @@ class OrthViewerControls(QWidget):
         Triggered only when the user manually edits the MNI coordinate spinboxes.
         Updates the UI (crosshairs, slices) based on the new coordinate.
         """
-        self.file_nr = self.brain_nav.file_nr
-        # self.file_nr_template = self.brain_nav.fileInfo[self.file_nr]['template_file_nr']
-        self.file_nr_template = self.brain_nav.file_nr_template
+        file_nr = self.brain_nav.file_nr
+        file_nr_template = self.brain_nav.file_nr_template
 
-
-        # Ensure data and affine are initialized (not the case on initiation)
-        if (not hasattr(self, "templates") or
-            not (self.file_nr, self.file_nr_template) in self.brain_nav.aligned_templateInfo or
-            'rtr_template_affine' not in self.brain_nav.aligned_templateInfo[(self.file_nr, self.file_nr_template)] or
-            not hasattr(self, "ranges") or
-            'data' not in self.templates[self.file_nr_template]):
+        # Ensure necessary data is initialized (not the case on initial load)
+        # Check if the current template data and its aligned affine are available
+        if (file_nr_template not in self.brain_nav.templates or
+            'data' not in self.brain_nav.templates[file_nr_template] or
+            (file_nr, file_nr_template) not in self.brain_nav.aligned_templateInfo or
+            'rtr_template_affine' not in self.brain_nav.aligned_templateInfo[(file_nr, file_nr_template)]):
 
             print("Data not initialized yet. Ignoring user input.")
             return
         
-        data = self.brain_nav.templates[self.file_nr_template]['data']
+        data = self.brain_nav.templates[file_nr_template]['data']
 
         x = self.coord_x.value()
         y = self.coord_y.value()
@@ -345,7 +343,7 @@ class OrthViewerControls(QWidget):
 
         # Convert MNI back to voxel space
         # affine = self.fileInfo[self.file_nr]['rtr_tamplate_affine']
-        affine = self.brain_nav.aligned_templateInfo[(self.file_nr, self.file_nr_template)]['rtr_template_affine']
+        affine = self.brain_nav.aligned_templateInfo[(file_nr, file_nr_template)]['rtr_template_affine']
         inv_affine = np.linalg.inv(affine)
         voxel_xyz = inv_affine @ np.array([x, y, z, 1])
         voxel_xyz = np.floor(voxel_xyz[:3]).astype(int)
