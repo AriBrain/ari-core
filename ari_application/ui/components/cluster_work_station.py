@@ -236,6 +236,8 @@ class ClusterWorkStation(QWidget):
 
     def update_tdp_from_text(self):
         """ Update TDP value when manually entered in the text box. """
+        print("[DEBUG] update_tdp_from_text method called.") 
+
         try:
             new_tdp = float(self.tdp_textbox.text())
             self.set_tdp(new_tdp)
