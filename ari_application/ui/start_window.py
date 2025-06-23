@@ -320,7 +320,7 @@ class StartWindow(QWidget):
         file_path, _ = QFileDialog.getOpenFileName(self, "Select NIfTI File", "", "NIfTI Files (*.nii *.nii.gz);;All Files (*)", options=options)
 
         if file_path:
-            if not file_path.endswith('.nii'):
+            if not file_path.endswith(('.nii','.nii.gz')):
                 self.file_input.setText("Invalid file type. Please select a .nii file.")
                 return
             try:
