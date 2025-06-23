@@ -238,7 +238,7 @@ class BrainNav(QMainWindow):
         self.left_side_bar.atlas_add_clicked.connect(self.upload_files.upload_atlas_dialog)
 
         self.init_panes()       # Creates left_container & right_container contained in outer_layout 
-        self.menu_bar.init_menu()        # Creates menu bar
+        # self.menu_bar.init_menu()        # Creates menu bar
 
         self.main_layout = QHBoxLayout(self.central_widget)
         self.main_layout.setContentsMargins(10, 10, 10, 10)
