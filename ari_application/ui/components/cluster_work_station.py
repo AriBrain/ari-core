@@ -132,7 +132,10 @@ class ClusterWorkStation(QWidget):
         self.tdp_textbox.setAlignment(Qt.AlignCenter)
         self.tdp_textbox.setStyleSheet("QLineEdit { font-size: 14px; }")
         # self.tdp_textbox.returnPressed.connect(self.update_tdp_from_text)
+        self.tdp_textbox.setFocusPolicy(Qt.StrongFocus) # Explicitly set focus policy
+        print(f"[DEBUG] Connecting tdp_textbox (ID: {id(self.tdp_textbox)}) editingFinished signal.")
         self.tdp_textbox.editingFinished.connect(self.update_tdp_from_text)
+
 
 
         self.prev_state_button = QPushButton('↺')
@@ -241,7 +244,7 @@ class ClusterWorkStation(QWidget):
         print("[DEBUG] update_tdp_from_text method called.") 
 
         try:
-            new_tdp = round(float(self.tdp_textbox.text()))
+            new_tdp = float(self.tdp_textbox.text())
             self.set_tdp(new_tdp)
         except ValueError:
             print("[DEBUG]")
