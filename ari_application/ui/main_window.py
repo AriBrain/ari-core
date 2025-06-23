@@ -218,11 +218,6 @@ class BrainNav(QMainWindow):
                 self.left_side_bar.template_list.addItem(name)
             self.left_side_bar.template_list.setCurrentRow(self.file_nr_template)
 
-        # show default metrics
-        self.metrics.show_metrics()
-
- 
-
         # === Set Window Properties === #
         self.setWindowTitle("ARIBrain")
         screen_resolution = QDesktopWidget().screenGeometry()
@@ -238,7 +233,7 @@ class BrainNav(QMainWindow):
         self.left_side_bar.atlas_add_clicked.connect(self.upload_files.upload_atlas_dialog)
 
         self.init_panes()       # Creates left_container & right_container contained in outer_layout 
-        self.menu_bar.init_menu()        # Creates menu bar
+        # self.menu_bar.init_menu()        # Creates menu bar
 
         self.main_layout = QHBoxLayout(self.central_widget)
         self.main_layout.setContentsMargins(10, 10, 10, 10)
@@ -268,7 +263,8 @@ class BrainNav(QMainWindow):
             self.metrics.show_metrics()
             self.orth_view_setup.setup_viewer()
   
-
+        # show default metrics
+        self.metrics.show_metrics()
 
 
     def init_panes(self):

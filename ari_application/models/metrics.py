@@ -106,7 +106,10 @@ class Metrics:
             voxelsize = BrainNav.aligned_statMapInfo[(file_nr, file_nr_template)]['overlay_header'].get_zooms()
 
             # MNI_xyzs = Metrics.xyz2MNI(xyzs, BrainNav.fileInfo[file_nr]['r_template_image_hdr'])
-            # MNI_xyzs = self.xyz2MNI(xyzs, BrainNav.fileInfo[file_nr]['rtr_tamplate_affine'])
+            # Convert NumPy float types to standard Python floats and format for display
+            voxelsize = tuple(f"{v:.1f}" for v in voxelsize)
+
+            # MNI_xyzs = self.xyz2MNI(xyzs, BrainNav.fileInfo[file_nr]['rtr_template_affine'])
             MNI_xyzs = self.xyz2MNI(xyzs, BrainNav.aligned_templateInfo[(file_nr, file_nr_template)]['rtr_template_affine'] )
 
             # Update the xyz ui boxes in orth controls
@@ -733,7 +736,7 @@ class Metrics:
         lm_ids_df = self.brain_nav.fileInfo[file_nr]['stable_LM_ids_df']
 
         # Handle the case where no clusters are found
-        if n == 0:
+        if clusterlist is None or len(clusterlist) == 0:
             # Show a modal dialog to the user if no clusters were formed with the current threshold
             self.show_modal_dialog(
                 "No clusters",
@@ -1159,18 +1162,41 @@ class Metrics:
             file_info['step'] = len(file_info['clusterlist_history']) - 1
 
             # Print the information 
+            # print('cluster_history n:', len(file_info['clusterlist_history']))
+            # print('step:', file_info['step'])
+            # print(" ")
+            # print('cluster_label_history:', file_info['cluster_label_history'])
+            # print('xyz_history:', file_info['xyz_history'])
+            # print(" ")
+
+            # message = (
+            # f"Cluster History: n = {len(file_info['clusterlist_history'])}<br>"
+            # f"Step: {file_info['step']}<br><br>"
+            # f"Cluster Label History: {file_info['cluster_label_history']}<br>"
+            # f"XYZ History: {file_info['xyz_history']}<br><br>"
+            # )
             print('cluster_history n:', len(file_info['clusterlist_history']))
             print('step:', file_info['step'])
             print(" ")
-            print('cluster_label_history:', file_info['cluster_label_history'])
-            print('xyz_history:', file_info['xyz_history'])
+            # Format cluster_label_history to show integers only
+            formatted_cluster_labels = [int(label) for label in file_info['cluster_label_history']]
+            print('cluster_label_history:', formatted_cluster_labels)
+            # Format xyz_history to show integers only
+            formatted_xyz_history = [tuple(int(coord) for coord in xyz) for xyz in file_info['xyz_history']]
+            print('xyz_history:', formatted_xyz_history)
             print(" ")
-
+            
+            # message = (
+            #     f"Cluster History: n = {len(file_info['clusterlist_history'])}<br>"
+            #     f"Step: {file_info['step']}<br><br>"
+            #     f"Cluster Label History: {file_info['cluster_label_history']}<br>"
+            #     f"XYZ History: {file_info['xyz_history']}<br><br>"
+            # )
             message = (
-            f"Cluster History: n = {len(file_info['clusterlist_history'])}<br>"
-            f"Step: {file_info['step']}<br><br>"
-            f"Cluster Label History: {file_info['cluster_label_history']}<br>"
-            f"XYZ History: {file_info['xyz_history']}<br><br>"
+                f"Cluster History: n = {len(file_info['clusterlist_history'])}<br>"
+                f"Step: {file_info['step']}<br><br>"
+                f"Cluster Label History: {formatted_cluster_labels}<br>"
+                f"XYZ History: {formatted_xyz_history}<br><br>"
             )
             self.brain_nav.message_box.log_message(message)
                                 
@@ -1270,15 +1296,25 @@ class Metrics:
         print('cluster_history n:', len(file_info['clusterlist_history']))
         print('step:', file_info['step'])
         print(" ")
-        print('cluster_label_history:', file_info['cluster_label_history'])
-        print('xyz_history:', file_info['xyz_history'])
+        # Format cluster_label_history to show integers only
+        formatted_cluster_labels = [int(label) for label in file_info['cluster_label_history']]
+        print('cluster_label_history:', formatted_cluster_labels)
+        # Format xyz_history to show integers only
+        formatted_xyz_history = [tuple(int(coord) for coord in xyz) for xyz in file_info['xyz_history']]
+        print('xyz_history:', formatted_xyz_history)
         print(" ")
-
+        
+        # message = (
+        #     f"Cluster History: n = {len(file_info['clusterlist_history'])}<br>"
+        #     f"Step: {file_info['step']}<br><br>"
+        #     f"Cluster Label History: {file_info['cluster_label_history']}<br>"
+        #     f"XYZ History: {file_info['xyz_history']}<br><br>"
+        # )
         message = (
             f"Cluster History: n = {len(file_info['clusterlist_history'])}<br>"
             f"Step: {file_info['step']}<br><br>"
-            f"Cluster Label History: {file_info['cluster_label_history']}<br>"
-            f"XYZ History: {file_info['xyz_history']}<br><br>"
+            f"Cluster Label History: {formatted_cluster_labels}<br>"
+            f"XYZ History: {formatted_xyz_history}<br><br>"
         )
         self.brain_nav.message_box.log_message(message)
 
@@ -1344,8 +1380,12 @@ class Metrics:
         total_steps = len(file_info['clusterlist_history'])
         print("\033[96m--- State Restored ---\033[0m")
         print(f"Cluster State: {step + 1}/{total_steps}")  # Convert 0-based to 1-based for readability
-        print(f"Cluster Label: {label if label is not None else 'N/A'}")
-        print(f"Coordinates: (x={x}, y={y}, z={z})")
+        # Format label and coordinates to show integers only
+        formatted_label = int(label) if label is not None else 'N/A'
+        formatted_x, formatted_y, formatted_z = int(x), int(y), int(z)
+
+        print(f"Cluster Label: {formatted_label}")
+        print(f"Coordinates: (x={formatted_x}, y={formatted_y}, z={formatted_z})")
         
         message = (
             '<span style="color:#00ffff;">--- State Restored ---</span><br>'

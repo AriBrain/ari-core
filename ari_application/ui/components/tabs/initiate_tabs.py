@@ -56,7 +56,7 @@ class InitiateTabs(QWidget):
 
         self.brain_nav = BrainNav
 
-        self.init_table()
+        # self.init_table()
 
     def init_table(self):
         # Create the main container for the tabs

@@ -25,11 +25,19 @@ Traditional cluster-wise inference methods in fMRI often suffer from the “spat
 
 ### ARIBrain Installation Guide
 
-This document outlines how to install and run the ARIBrain desktop application using pipx. The installer automatically sets up Python 3.10.14, creates a virtual environment, and compiles C++ extensions. Works on macOS and Linux.
+This guide provides platform-specific instructions for installing ARIBrain desktop application using pipx. The installer automatically sets up Python 3.10.X, creates a virtual environment, and compiles C++ extensions. Works on macOS and Linux.
+
+---
+
+### macOS & Linux
+The installation script automates the setup of Python, dependencies, and C++ extensions.
+
 
 ### Prerequisites
 
-- Python 3.10.14 (will be installed automatically via pyenv if missing)
+- A C compiler (e.g., Xcode Command Line Tools on macOS, or `build-essential` on Debian/Ubuntu).
+- `curl` to download the installer.
+- Python 3.10.X (will be installed automatically via pyenv if missing)
 - pipx (used to isolate app installs in their own environment)
 
 ### 1. Install pipx
@@ -53,7 +61,7 @@ curl -sSL https://raw.githubusercontent.com/AriBrain/ari-core/main/install.sh | 
 
 This will:
 
-- Install pyenv (if missing)
+- Install pyenv to manage Python versions (if missing)
 - Install Python 3.10.14 (if missing)
 - Create a dedicated environment (`aribrain`) in: ` ~/.local/pipx/venvs/aribrain`
 - Use pipx to install ARIBrain from GitHub
@@ -96,10 +104,94 @@ The virtualenv uses Python 3.10.14 provided by pyenv, isolated from your system 
 - The application is fetched from the GitHub repo: https://github.com/AriBrain/ari-core
 - Make sure your system has a compiler installed (e.g., Xcode Command Line Tools on macOS).
 
-### Prerequisites
+---
 
-- Will be installed automatically into the venv created by pipx
+## Windows Installation
 
+This installation method uses a PowerShell script to automate the setup on Windows 10 and 11.
+
+### 1. Install Prerequisites (One-time Setup)
+
+Before running the main installer, a few tools are needed. The following steps will guide you through setting them up using PowerShell.
+
+#### Install Python (if not already on your system)
+
+- Go to https://www.python.org/downloads/windows to download and run the installer.
+- **Important**: Check the box for **"Add python.exe to PATH"** during installation.
+
+#### Install Git (if not already on your system)
+
+Open PowerShell and run the following command:
+
+```powershell
+winget install --id Git.Git -e --source winget
+```
+
+#### Install pipx (if not already on your system)
+
+Open a new PowerShell terminal, then run:
+
+```powershell
+py -m pip install --user pipx
+py -m pipx ensurepath
+```
+
+Close and reopen the PowerShell terminal after this step.
+
+---
+
+### 2. Install ARIBrain (One-liner)
+
+Run the following command in a fresh PowerShell terminal:
+
+```powershell
+powershell -NoExit -Command "& {Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process; iwr -useb https://raw.githubusercontent.com/AriBrain/ari-core/main/install.ps1 | iex}"
+```
+
+This script will:
+
+- Install the Microsoft C++ Build Tools if missing (this may take time)
+- Install `pyenv-win` if missing
+- Use `pyenv-win` to install Python 3.10.11 if needed
+- Use `pipx` to install ARIBrain from GitHub in an isolated environment
+
+---
+
+### 3. Troubleshooting
+
+If you get an error about **Microsoft Visual C++ 14.0 or greater**, the build tools likely didn't install correctly.
+
+To fix this manually:
+
+1. Open **Start Menu** and run **Visual Studio Installer**
+2. Find **Visual Studio Build Tools 2022** and click **Modify**
+3. In the **Workloads** tab, check **Desktop development with C++**
+4. Click **Modify** to install
+5. Re-run the installation command from Step 2
+
+---
+
+## Running ARIBrain (All Platforms)
+
+After installation, launch the application by running:
+
+```bash
+aribrain
+```
+
+This will open the application GUI.
+
+---
+
+## Reinstalling or Cleaning Up
+
+To uninstall ARIBrain:
+
+```bash
+pipx uninstall aribrain
+Remove-Item -Path "$env:USERPROFILE\.local\pipx\venvs\aribrain" -Recurse -Force
+Remove-Item -Path "$env:USERPROFILE\.local\bin\aribrain" -Recurse -Force
+Remove-Item -Path "$env:USERPROFILE\.pyenv\pyenv-win\versions\3.10.11" -Recurse -Force
 
 ---
 ---
