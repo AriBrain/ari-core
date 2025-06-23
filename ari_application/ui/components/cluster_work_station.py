@@ -132,7 +132,7 @@ class ClusterWorkStation(QWidget):
         self.tdp_textbox.setAlignment(Qt.AlignCenter)
         self.tdp_textbox.setStyleSheet("QLineEdit { font-size: 14px; }")
         # self.tdp_textbox.returnPressed.connect(self.update_tdp_from_text)
-        self.tdp_textbox.returnPressed.connect(lambda: self.set_tdp(float(self.tdp_textbox.text())))
+        self.tdp_textbox.editingFinished.connect(self.update_tdp_from_text)
 
 
         self.prev_state_button = QPushButton('↺')
