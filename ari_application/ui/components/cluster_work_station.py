@@ -131,10 +131,9 @@ class ClusterWorkStation(QWidget):
         self.tdp_textbox.setFixedWidth(50)
         self.tdp_textbox.setAlignment(Qt.AlignCenter)
         self.tdp_textbox.setStyleSheet("QLineEdit { font-size: 14px; }")
-        # self.tdp_textbox.returnPressed.connect(self.update_tdp_from_text)
-        self.tdp_textbox.setFocusPolicy(Qt.StrongFocus) # Explicitly set focus policy
-        print(f"[DEBUG] Connecting tdp_textbox (ID: {id(self.tdp_textbox)}) editingFinished signal.")
-        self.tdp_textbox.editingFinished.connect(self.update_tdp_from_text)
+        self.tdp_textbox.returnPressed.connect(self.update_tdp_from_text)
+        # self.tdp_textbox.setFocusPolicy(Qt.StrongFocus) # Explicitly set focus policy
+        # self.tdp_textbox.editingFinished.connect(self.update_tdp_from_text)
 
 
 
@@ -241,13 +240,10 @@ class ClusterWorkStation(QWidget):
 
     def update_tdp_from_text(self):
         """ Update TDP value when manually entered in the text box. """
-        print("[DEBUG] update_tdp_from_text method called.") 
-
         try:
             new_tdp = float(self.tdp_textbox.text())
             self.set_tdp(new_tdp)
         except ValueError:
-            print("[DEBUG]")
             invalid_text = self.tdp_textbox.text()
             print(f"[DEBUG] Invalid float entered in TDP textbox: '{invalid_text}'")
             # Reset to the current slider value if input is invalid

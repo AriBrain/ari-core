@@ -93,6 +93,7 @@ class UIHelpers:
 
         # Re-enable signals
         self.brain_nav.cluster_ws.cluster_slider.blockSignals(False)
+        self.brain_nav.cluster_ws.tdp_textbox.blockSignals(False)
 
 
     def get_selected_cluster_id(self):
@@ -157,5 +158,3 @@ class UIHelpers:
 
         self.brain_nav.left_side_bar.update_ari_status()    # updates: ARI status in the list
     
-
-
