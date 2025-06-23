@@ -36,7 +36,7 @@ class MenuBar:
         This function initiates the dialog window and manages the display and interactivity of the settings options.
         """
 
-        dialog = QDialog(self)
+        dialog = QDialog(self.brain_nav)
         dialog.setWindowTitle('Analysis Settings')
 
         # Create a form layout for the settings
