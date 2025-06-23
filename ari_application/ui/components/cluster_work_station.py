@@ -240,6 +240,8 @@ class ClusterWorkStation(QWidget):
             new_tdp = float(self.tdp_textbox.text())
             self.set_tdp(new_tdp)
         except ValueError:
+            invalid_text = self.tdp_textbox.text()
+            print(f"[DEBUG] Invalid float entered in TDP textbox: '{invalid_text}'")
             # Reset to the current slider value if input is invalid
             self.tdp_textbox.setText(f"{self.cluster_slider.value() / 100:.2f}")
 
