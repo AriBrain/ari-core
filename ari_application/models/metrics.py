@@ -106,7 +106,10 @@ class Metrics:
             voxelsize = BrainNav.aligned_statMapInfo[(file_nr, file_nr_template)]['overlay_header'].get_zooms()
 
             # MNI_xyzs = Metrics.xyz2MNI(xyzs, BrainNav.fileInfo[file_nr]['r_template_image_hdr'])
-            # MNI_xyzs = self.xyz2MNI(xyzs, BrainNav.fileInfo[file_nr]['rtr_tamplate_affine'])
+            # Convert NumPy float types to standard Python floats and format for display
+            voxelsize = tuple(f"{v:.1f}" for v in voxelsize)
+
+            # MNI_xyzs = self.xyz2MNI(xyzs, BrainNav.fileInfo[file_nr]['rtr_template_affine'])
             MNI_xyzs = self.xyz2MNI(xyzs, BrainNav.aligned_templateInfo[(file_nr, file_nr_template)]['rtr_template_affine'] )
 
             # Update the xyz ui boxes in orth controls
