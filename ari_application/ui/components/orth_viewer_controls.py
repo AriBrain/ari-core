@@ -323,7 +323,8 @@ class OrthViewerControls(QWidget):
         Updates the UI (crosshairs, slices) based on the new coordinate.
         """
         self.file_nr = self.brain_nav.file_nr
-        self.file_nr_template = self.brain_nav.fileInfo[self.file_nr]['template_file_nr']
+        # self.file_nr_template = self.brain_nav.fileInfo[self.file_nr]['template_file_nr']
+        self.file_nr_template = self.brain_nav.file_nr_template
 
 
         # Ensure data and affine are initialized (not the case on initiation)
