@@ -1273,10 +1273,14 @@ class Metrics:
         print('cluster_history n:', len(file_info['clusterlist_history']))
         print('step:', file_info['step'])
         print(" ")
-        print('cluster_label_history:', file_info['cluster_label_history'])
-        print('xyz_history:', file_info['xyz_history'])
+        # Format cluster_label_history to show integers only
+        formatted_cluster_labels = [int(label) for label in file_info['cluster_label_history']]
+        print('cluster_label_history:', formatted_cluster_labels)
+        # Format xyz_history to show integers only
+        formatted_xyz_history = [tuple(int(coord) for coord in xyz) for xyz in file_info['xyz_history']]
+        print('xyz_history:', formatted_xyz_history)
         print(" ")
-
+        
         message = (
             f"Cluster History: n = {len(file_info['clusterlist_history'])}<br>"
             f"Step: {file_info['step']}<br><br>"
@@ -1347,8 +1351,12 @@ class Metrics:
         total_steps = len(file_info['clusterlist_history'])
         print("\033[96m--- State Restored ---\033[0m")
         print(f"Cluster State: {step + 1}/{total_steps}")  # Convert 0-based to 1-based for readability
-        print(f"Cluster Label: {label if label is not None else 'N/A'}")
-        print(f"Coordinates: (x={x}, y={y}, z={z})")
+        # Format label and coordinates to show integers only
+        formatted_label = int(label) if label is not None else 'N/A'
+        formatted_x, formatted_y, formatted_z = int(x), int(y), int(z)
+
+        print(f"Cluster Label: {formatted_label}")
+        print(f"Coordinates: (x={formatted_x}, y={formatted_y}, z={formatted_z})")
         
         message = (
             '<span style="color:#00ffff;">--- State Restored ---</span><br>'
