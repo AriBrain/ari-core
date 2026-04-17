@@ -1,0 +1,14 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "ARIbrain (debugpy)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "ari_application.main",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}
