@@ -147,14 +147,14 @@ class WBTing(QWidget):
                 padding: 5px;
             }
         """)
-        self.tdp_textbox1.returnPressed.connect(lambda: self.update_threshold_label(float(self.tdp_textbox1.text())))
+        self.tdp_textbox1.returnPressed.connect(self.update_threshold_from_text)
 
         # Run Button (spaced slightly to the right)
         self.reset_button2 = QPushButton('Run')
         self.reset_button2.setCursor(Qt.PointingHandCursor)
         self.reset_button2.setStyleSheet(Styles.runARI_button_styling)
         self.reset_button2.setFixedSize(80, 40)
-        self.reset_button2.clicked.connect(lambda: self.update_threshold_label(float(self.tdp_textbox1.text())))
+        self.reset_button2.clicked.connect(self.update_threshold_from_text)
 
          # **Left Layout (Textbox + Run Button)**
         self.left_container = QWidget()
@@ -316,6 +316,25 @@ class WBTing(QWidget):
 
         # Remove selected cluster if any
         self.ui_params['selected_cluster_id'] = None
+
+    def update_threshold_from_text(self):
+        """
+        Safely updates the threshold from the textbox input.
+        This method is connected to the 'Run' button and the QLineEdit's returnPressed signal.
+        """
+        try:
+            new_threshold = float(self.tdp_textbox1.text())
+            # The sender will be either the textbox or the button.
+            # We can call update_threshold_label directly, as it's designed to handle these senders.
+            self.update_threshold_label(new_threshold)
+        except ValueError:
+            invalid_text = self.tdp_textbox1.text()
+            print(f"[DEBUG] Invalid float entered in Whole Brain Threshold textbox: '{invalid_text}'")
+            # Reset to the current slider value if input is invalid
+            self.tdp_textbox1.setText(f"{self.threshold_slider1.value() / 100:.2f}")
+            self.brain_nav.message_box.log_message(
+                f"<span style='color: orange; font-weight: bold;'>Invalid input: '{invalid_text}'. Please enter a valid number.</span>"
+            )
 
     def update_tdp_bounds(self):
         """

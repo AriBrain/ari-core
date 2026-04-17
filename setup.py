@@ -148,19 +148,16 @@
 from setuptools import setup, Extension, find_packages
 from Cython.Build import cythonize
 import numpy as np
-import os
-
-current_dir = os.path.dirname(os.path.abspath(__file__))
 
 debug_args = ["-g", "-O0", "-Wall"]
-common_sources = [os.path.join(current_dir, "ari_application/cpp_extensions/cpp_sources/hommel.cpp")]
+common_sources = ["ari_application/cpp_extensions/cpp_sources/hommel.cpp"]
 
 extensions = [
     Extension(
         name="ari_application.cpp_extensions.cython_modules.hommel",
         sources=[
-            os.path.join(current_dir, "ari_application/cpp_extensions/cython_modules/hommel.pyx"),
-            os.path.join(current_dir, "ari_application/cpp_extensions/cpp_sources/hommel.cpp")
+            "ari_application/cpp_extensions/cython_modules/hommel.pyx",
+            "ari_application/cpp_extensions/cpp_sources/hommel.cpp",
         ],
         language="c++",
         include_dirs=[np.get_include()],
@@ -170,9 +167,9 @@ extensions = [
     Extension(
         name="ari_application.cpp_extensions.cython_modules.ARICluster",
         sources=[
-            os.path.join(current_dir, "ari_application/cpp_extensions/cython_modules/ARICluster.pyx"),
-            os.path.join(current_dir, "ari_application/cpp_extensions/cpp_sources/ARICluster.cpp"),
-            *common_sources
+            "ari_application/cpp_extensions/cython_modules/ARICluster.pyx",
+            "ari_application/cpp_extensions/cpp_sources/ARICluster.cpp",
+            *common_sources,
         ],
         language="c++",
         include_dirs=[np.get_include()],

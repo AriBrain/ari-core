@@ -736,7 +736,7 @@ class Metrics:
         # Handle the case where no clusters are found
         if clusterlist is None or len(clusterlist) == 0:
             # Show a modal dialog to the user if no clusters were formed with the current threshold
-            self.show_modal_dialog(
+            self.brain_nav.show_modal_dialog(
                 "No clusters",
                 "No clusters can be formed with the given TDP threshold. Please reduce the threshold."
             )
