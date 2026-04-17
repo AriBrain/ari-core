@@ -33,8 +33,10 @@ dist/
 # Jupyter notebooks (optional)
 .ipynb_checkpoints/
 
-# VSCode settings (optional)
-.vscode/
+# VSCode settings — share launch and workspace config, keep everything else local
+.vscode/*
+!.vscode/launch.json
+!.vscode/settings.json
 
 # OS backup files
 *~
