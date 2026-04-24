@@ -2,121 +2,132 @@
 
 ## Overview
 
-This document describes how to build a standalone `ARIbrain.app` from the ari-core repository using PyInstaller.
+This document describes how to build a standalone `ARIbrain.app` from the
+ari-core repository using PyInstaller. The resulting `.app` bundles Python,
+all dependencies, compiled Cython extensions, and data files (templates,
+atlases, logos) into a single application that end users can run without
+installing Python.
+
+For day-to-day development setup (creating the `.venv`, running the app
+with the debugger, adding dependencies), see
+[DEVELOPMENT.md](DEVELOPMENT.md).
 
 ## Prerequisites
 
-- macOS with ARM64 (Apple Silicon) or x86_64 architecture
-- Python 3.10.14 installed via pipx with aribrain package
-- PyInstaller 6.18.0+
+- macOS (ARM64 / Apple Silicon or x86_64)
+- The dev `.venv/` set up per [DEVELOPMENT.md](DEVELOPMENT.md) section 1a
+- PyInstaller — installed automatically via the `[build]` extra when you
+  run `pip install -e ".[build]"`
 
-## Build Environment
+## Build environment
 
-The build uses the existing pipx virtual environment where aribrain is installed:
-- Python: `/Users/lucaspeek/.local/pipx/venvs/aribrain/bin/python`
-- Site-packages: `/Users/lucaspeek/.local/pipx/venvs/aribrain/lib/python3.10/site-packages`
+The build runs out of the dev `.venv/`. [aribrain.spec](../aribrain.spec)
+locates the `ari_application` package by importing it, so whichever Python
+executes PyInstaller must have the package installed — which is already
+the case in `.venv` via the editable install. This also means the build
+automatically picks up any changes you've made to the source tree: no
+reinstall step is needed between code edits and a rebuild.
 
-This environment contains the compiled Cython extensions (`.so` files) which are required for the app to run.
+The compiled Cython extensions (`.so` files) live alongside the `.pyx`
+sources in `ari_application/cpp_extensions/cython_modules/` after
+`pip install -e ".[build]"`. The spec globs that directory, so any `.so`
+found there is bundled.
 
-## Build Steps
+## Build steps
 
-### 1. Install PyInstaller in the pipx venv
+### 1. (One-time) Set up the dev env
+
+Follow [DEVELOPMENT.md section 1a](DEVELOPMENT.md#1a-create-the-dev-venv-and-install-the-app-editable).
+The `[build]` extra installs PyInstaller.
+
+### 2. Clean previous build artifacts
 
 ```bash
-/Users/lucaspeek/.local/pipx/venvs/aribrain/bin/python -m pip install pyinstaller
+rm -rf build dist
 ```
 
-### 2. Create the spec file
-
-The `aribrain.spec` file in the repo root configures the build. Key elements:
-
-- **binaries**: Explicitly includes the compiled Cython extensions (`ARICluster.cpython-310-darwin.so`, `hommel.cpython-310-darwin.so`)
-- **datas**: Includes resources, public assets, and the cpp_extensions directory
-- **hiddenimports**: Lists all required modules including scientific libraries (numpy, scipy, pandas, nibabel, nilearn, pyvista, etc.)
-- **console=False**: Creates a GUI app without terminal window
-- **argv_emulation=True**: macOS-specific for proper app behavior
+PyInstaller's `--clean` flag clears its internal cache but does **not**
+delete `build/` or `dist/`. For a release or verification build, remove
+them manually so stale files from a previous run can't leak into the new
+bundle.
 
 ### 3. Build the app
 
+From the repo root:
+
 ```bash
-cd /Users/lucaspeek/PostDocs/Weeda/ari-core
-/Users/lucaspeek/.local/pipx/venvs/aribrain/bin/pyinstaller aribrain.spec --clean
+.venv/bin/pyinstaller aribrain.spec --clean
 ```
+
+Build takes a few minutes. `--clean` invalidates PyInstaller's cached
+analysis so imports are re-resolved from scratch.
 
 ### 4. Output
 
-- `dist/ARIbrain.app` - The standalone macOS application (768MB)
-- `dist/ARIbrain/` - Intermediate build folder (can be deleted)
-- `build/` - Build cache (can be deleted)
+- `dist/ARIbrain.app` — the standalone macOS application (~1 GB)
+- `dist/ARIbrain/` — intermediate folder (safe to delete)
+- `build/` — PyInstaller's build cache (safe to delete)
 
-### 5. Create distributable zip
+### 5. Create a distributable zip
 
 ```bash
 cd dist
 zip -r ARIbrain-macos.zip ARIbrain.app
 ```
 
-Final zip size: ~762MB
-
 ## Testing
 
-Run the app directly to test:
+Run the app from the terminal so you see tracebacks if something crashes:
 
 ```bash
-./dist/ARIbrain.app/Contents/MacOS/ARIbrain
+dist/ARIbrain.app/Contents/MacOS/ARIbrain
 ```
 
-Or double-click `ARIbrain.app` in Finder.
+Or double-click `ARIbrain.app` in Finder for the normal user experience.
+
+## Release builds
+
+For a build you intend to publish on the website, do the build from a
+fresh clone at a tagged commit so the artifact corresponds 1:1 with a
+release tag, rather than from your working dev tree:
+
+```bash
+git clone https://github.com/AriBrain/ari-core.git /tmp/ari-core-release
+cd /tmp/ari-core-release
+git checkout v0.1.0                           # the tag you're releasing
+python3.10 -m venv .build-venv
+.build-venv/bin/pip install --upgrade pip
+.build-venv/bin/pip install -e ".[build]"
+.build-venv/bin/pyinstaller aribrain.spec --clean
+cd dist && zip -r ARIbrain-v0.1.0-macos.zip ARIbrain.app
+```
+
+Reasons: no dev cruft from interactive experimentation, the build matches
+a specific commit, and `/tmp/ari-core-release` is throwaway.
 
 ## Troubleshooting
 
-### Missing Cython extensions
-If you get `ModuleNotFoundError: No module named 'ari_application.cpp_extensions'`:
-- Ensure you're building with the pipx Python that has the compiled extensions
-- Verify the `.so` files exist in the pipx site-packages
+### Missing Cython extensions at build time
+If PyInstaller skips the `.so` files or the glob finds nothing:
+- Confirm the extensions were compiled: `ls
+  ari_application/cpp_extensions/cython_modules/*.so` should show at
+  least `ARICluster.cpython-*.so` and `hommel.cpython-*.so`.
+- If they're missing, rerun `.venv/bin/pip install -e ".[build]"` to
+  trigger the Cython build.
 
 ### Missing imports at runtime
-Add the module name to the `hiddenimports` list in `aribrain.spec` and rebuild.
+Add the module name to the `hiddenimports` list in
+[aribrain.spec](../aribrain.spec) and rebuild.
 
 ### Missing resources
-Add the path to the `datas` list in `aribrain.spec` and rebuild.
-
-## Files Created
-
-| File | Size | Description |
-|------|------|-------------|
-| `aribrain.spec` | 2KB | PyInstaller configuration |
-| `dist/ARIbrain.app` | 768MB | Standalone macOS application |
-| `dist/ARIbrain-macos.zip` | 762MB | Distributable archive |
-
-## Known Issues
-
-### Main UI not loading after landing screen
-
-The app opens and allows loading data files, but clicking "Next" may not transition to the main UI. Likely causes:
-
-1. **Missing resources/data files** - The main UI might need files from `public/` (templates, atlases) that aren't being found at runtime. The app looks for them relative to `__file__` which changes when bundled.
-
-2. **Path resolution issue** - Code like this in `main.py:29`:
-   ```python
-   icon_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'public', 'logo.jpg'))
-   ```
-   Needs adjustment for PyInstaller. Bundled apps should use:
-   ```python
-   import sys
-   if getattr(sys, 'frozen', False):
-       base_path = sys._MEIPASS
-   else:
-       base_path = os.path.dirname(__file__)
-   ```
-
-3. **Silent exception** - The transition to main UI might be throwing an error that's being swallowed. Test with console output to see tracebacks:
-   ```bash
-   ./dist/ARIbrain.app/Contents/MacOS/ARIbrain
-   ```
+Add the source path to the `datas` list in
+[aribrain.spec](../aribrain.spec) and rebuild. At runtime, the app
+resolves resource paths via `get_package_dir()` in
+[ari_application/__init__.py](../ari_application/__init__.py), which
+returns `sys._MEIPASS` inside a frozen bundle.
 
 ## Notes
 
-- The app is code-signed with ad-hoc signature (sufficient for local use)
-- For distribution via App Store or notarization, additional signing with Apple Developer certificate is required
-- Build tested on macOS 26.2 (arm64)
+- The app is code-signed with an ad-hoc signature (sufficient for local
+  use). For App Store distribution or notarization, additional signing
+  with an Apple Developer certificate is required.
