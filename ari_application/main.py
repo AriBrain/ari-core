@@ -10,6 +10,7 @@ from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QApplication
 
 # === Internal Application Imports ===
+from ari_application import get_package_dir
 from ari_application.ui.main_window import BrainNav
 from ari_application.ui.start_window import StartWindow
 from ari_application.ui.splash_screen import SplashScreen
@@ -26,7 +27,7 @@ def main():
     qdarktheme.setup_theme("dark")
 
     # Set the window icon
-    icon_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'public', 'logo.jpg'))
+    icon_path = os.path.join(get_package_dir(), 'public', 'logo.jpg')
     app.setWindowIcon(QIcon(icon_path))
 
     # Create and display the splash screen

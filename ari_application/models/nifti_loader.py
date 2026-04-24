@@ -8,6 +8,7 @@ from PyQt5.QtWidgets import QInputDialog, QMessageBox
 from PyQt5.QtWidgets import QInputDialog, QMessageBox
 import pyqtgraph as pg
 import os
+from ari_application import get_package_dir
 
 from ari_application.orth_views.orth_view_setup import OrthViewSetup
 from ari_application.models.image_processing import ImageProcessing
@@ -233,8 +234,8 @@ class NiftiLoader:
         }
 
         # load atlas and codebook - hardcoded for now
-        atlas_path                  = os.path.join(os.path.dirname(__file__), '..', 'public/atlases/AAL2/AAL2.nii')
-        codebook_path               = os.path.join(os.path.dirname(__file__), '..', 'public/atlases/AAL2/AAL2_CodeBook.txt')
+        atlas_path                  = os.path.join(get_package_dir(), 'public', 'atlases', 'AAL2', 'AAL2.nii')
+        codebook_path               = os.path.join(get_package_dir(), 'public', 'atlases', 'AAL2', 'AAL2_CodeBook.txt')
         atlas_img                   = nib.load(atlas_path)
         atlas_img                   = nib.as_closest_canonical(atlas_img)
         a_atlas_image, _            = ImageProcessing.align_images(image, atlas_img, order=0)

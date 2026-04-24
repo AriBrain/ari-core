@@ -1,12 +1,14 @@
 # -*- mode: python ; coding: utf-8 -*-
-import sys
+import glob
 import os
+
+import ari_application
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 block_cipher = None
 
-site_packages = '/Users/lucaspeek/.local/pipx/venvs/aribrain/lib/python3.10/site-packages'
-cython_dir = os.path.join(site_packages, 'ari_application/cpp_extensions/cython_modules')
+package_dir = os.path.dirname(ari_application.__file__)
+cython_dir = os.path.join(package_dir, 'cpp_extensions/cython_modules')
 
 hidden_imports = collect_submodules('ari_application') + [
     'nibabel', 'nilearn', 'scipy', 'pandas', 'numpy',
@@ -19,14 +21,14 @@ hidden_imports = collect_submodules('ari_application') + [
 ]
 
 binaries = [
-    (os.path.join(cython_dir, 'ARICluster.cpython-310-darwin.so'), 'ari_application/cpp_extensions/cython_modules'),
-    (os.path.join(cython_dir, 'hommel.cpython-310-darwin.so'), 'ari_application/cpp_extensions/cython_modules'),
+    (so, 'ari_application/cpp_extensions/cython_modules')
+    for so in glob.glob(os.path.join(cython_dir, '*.so'))
 ]
 
 datas = collect_data_files('ari_application') + [
     ('ari_application/resources', 'ari_application/resources'),
     ('ari_application/public', 'ari_application/public'),
-    (os.path.join(site_packages, 'ari_application/cpp_extensions'), 'ari_application/cpp_extensions'),
+    (os.path.join(package_dir, 'cpp_extensions'), 'ari_application/cpp_extensions'),
 ]
 
 a = Analysis(

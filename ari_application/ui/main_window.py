@@ -262,9 +262,8 @@ class BrainNav(QMainWindow):
             self.metrics.update_overlay_image(self.file_nr, cluster_label=None)
             self.metrics.show_metrics()
             self.orth_view_setup.setup_viewer()
-  
-        # show default metrics
-        self.metrics.show_metrics()
+        elif hasattr(self, 'data_bg_index'):
+            self.metrics.show_metrics()
 
 
     def init_panes(self):
