@@ -1,10 +1,24 @@
 
 
 import logging
+import os
+import sys
 import traceback
+
+
+def _log_dir():
+    if sys.platform == 'darwin':
+        return os.path.expanduser('~/Library/Logs/ARIbrain')
+    return os.path.expanduser('~/.aribrain/logs')
+
 
 class ErrorHandler:
     def __init__(self, log_file):
+        if not os.path.isabs(log_file):
+            log_dir = _log_dir()
+            os.makedirs(log_dir, exist_ok=True)
+            log_file = os.path.join(log_dir, log_file)
+
         self.logger = logging.getLogger('ErrorHandler')
         handler = logging.FileHandler(log_file)
         formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')

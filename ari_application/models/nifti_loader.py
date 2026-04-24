@@ -132,12 +132,6 @@ class NiftiLoader:
             self.brain_nav.axial_slice      = tmpdata.shape[ self.brain_nav.axial_dim ] // 2 
 
         
-            # Display metrics and set up the viewer
-            # Metrics.show_metrics(self.brain_nav)
-            if hasattr(self, 'metrics'):
-                self.metrics.show_metrics()
-            OrthViewSetup(self.brain_nav).setup_viewer()
-        
         except Exception as e:
             print(f'Error in load_bg: {e}')
             # error_handler.handle_exception(e)  # Use ErrorHandler to handle the exception

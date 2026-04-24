@@ -47,3 +47,4 @@ dist/
 
 # ARIBrain specific files
 *.ari
+*.log
