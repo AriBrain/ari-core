@@ -137,8 +137,7 @@ class pyHommel:
 
         # Create an array of indices sorted by p-values
         ix_sorted_p = np.zeros(m, dtype=int)
-        # ix_sorted_p[self.sorter] = np.arange(1, m + 1)
-        ix_sorted_p[self.sorter] = np.arange(m)
+        ix_sorted_p[self.sorter] = np.arange(1, m + 1)
         ix_sorted_p = ix_sorted_p[ix]
 
         # Convert to list for compatibility with the C++ function
