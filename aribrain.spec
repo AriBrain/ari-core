@@ -9,6 +9,7 @@ block_cipher = None
 
 package_dir = os.path.dirname(ari_application.__file__)
 cython_dir = os.path.join(package_dir, 'cpp_extensions/cython_modules')
+icon_path = os.path.join(package_dir, 'public', 'logo.icns')
 
 hidden_imports = collect_submodules('ari_application') + [
     'nibabel', 'nilearn', 'scipy', 'pandas', 'numpy',
@@ -65,6 +66,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=icon_path,
 )
 
 coll = COLLECT(
@@ -81,7 +83,7 @@ coll = COLLECT(
 app = BUNDLE(
     coll,
     name='ARIbrain.app',
-    icon=None,
+    icon=icon_path,
     bundle_identifier='org.aribrain.app',
     info_plist={
         'CFBundleName': 'ARIbrain',
