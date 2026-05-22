@@ -266,7 +266,7 @@ class WBTing(QWidget):
                 self.metrics.update_overlay_image(file_nr, cluster_label = None)
 
                 # Send the current tdp to the message box
-                self.brain_nav.message_box.log_message(f"<span style='color: white;'>Whole Brain TDP = {tdpthresh:.2f}</span>")
+                self.brain_nav.message_box.info(f"Whole Brain TDP = {tdpthresh:.2f}")
 
             else:        
                 self.threshold_slider1.setValue(75)
@@ -303,7 +303,7 @@ class WBTing(QWidget):
                 self.metrics.update_overlay_image(file_nr, cluster_label = None)
                 
                 # Send the current tdp to the message box
-                self.brain_nav.message_box.log_message(f"<span style='color: white;'>Whole Brain Z-score = {zthresh:.2f}</span>")
+                self.brain_nav.message_box.info(f"Whole Brain Z-score = {zthresh:.2f}")
 
             else:        
                 self.threshold_slider1.setValue(int(zmin*100))  # Example initial value
@@ -332,8 +332,8 @@ class WBTing(QWidget):
             print(f"[DEBUG] Invalid float entered in Whole Brain Threshold textbox: '{invalid_text}'")
             # Reset to the current slider value if input is invalid
             self.tdp_textbox1.setText(f"{self.threshold_slider1.value() / 100:.2f}")
-            self.brain_nav.message_box.log_message(
-                f"<span style='color: orange; font-weight: bold;'>Invalid input: '{invalid_text}'. Please enter a valid number.</span>"
+            self.brain_nav.message_box.warn(
+                f"Invalid input: '{invalid_text}'. Please enter a valid number."
             )
 
     def update_tdp_bounds(self):
@@ -443,10 +443,8 @@ class WBTing(QWidget):
             elif sender == self.threshold_slider1: #or sender == self.reset_button2:
                 value = min_bound 
 
-            self.brain_nav.message_box.log_message(
-                f"<span style='color: orange; font-weight: bold;'>"
-                f"Warning: Lower limit reached at {min_bound:.2f}, increase threshold value."
-                f"</span>"
+            self.brain_nav.message_box.warn(
+                f"Lower limit reached at {min_bound:.2f}, increase threshold value."
             )
         if check_value > max_bound:
             if sender == self.minus_button1 or sender == self.plus_button1:
@@ -455,10 +453,8 @@ class WBTing(QWidget):
                 value = max_bound
             elif sender == self.threshold_slider1: #or sender == self.reset_button2:
                 value = max_bound 
-            self.brain_nav.message_box.log_message(
-                f"<span style='color: orange; font-weight: bold;'>"
-                f"Warning: Upper limit reached at {max_bound:.2f}, decrease threshold value."
-                f"</span>"
+            self.brain_nav.message_box.warn(
+                f"Upper limit reached at {max_bound:.2f}, decrease threshold value."
             )
  
         # Block signals to prevent auto updates and infinite loops
@@ -483,13 +479,13 @@ class WBTing(QWidget):
 
         # Send message to user
         if selected_option == "TDP-based":
-            self.brain_nav.message_box.log_message(f"<span style='color: white;'>Whole Brain TDP = {value:.2f}</span>")
+            self.brain_nav.message_box.info(f"Whole Brain TDP = {value:.2f}")
 
             # Update threshold value in fileINFO and apply the new threshold value to the metrics
             self.fileInfo[self.file_nr]['tdp_threshold'] = value
             self.metrics.control_threshold(thresholding_method = "tdp", threshold_value = value)
         elif selected_option == "Z-score based":
-            self.brain_nav.message_box.log_message(f"<span style='color: white;'>Whole Brain Z-score = {value:.2f}</span>")
+            self.brain_nav.message_box.info(f"Whole Brain Z-score = {value:.2f}")
 
             # Update threshold value in fileINFO and apply the new threshold value to the metrics
             self.fileInfo[self.file_nr]['zscore_threshold'] = value
@@ -515,7 +511,7 @@ class WBTing(QWidget):
             min_bound = self.fileInfo[self.file_nr].get('zmin', -10.0)
             max_bound = self.fileInfo[self.file_nr].get('zmax', 10.0)
         else:
-            self.brain_nav.message_box.log_message("Unknown thresholding method selected.")
+            self.brain_nav.message_box.warn("Unknown thresholding method selected.")
             return
         
         self.brain_nav.initiate_tabs.advisory_text.setText(self.brain_nav.initiate_tabs.advisory_messages.get(selected_option, ""))
@@ -539,7 +535,7 @@ class WBTing(QWidget):
 
         # Log user message
         label = "TDP" if selected_option == "TDP-based" else "Z-score"
-        self.brain_nav.message_box.log_message(f"<span style='color: white;'>Threshold reverted to stored {label} = {value:.2f}</span>")
+        self.brain_nav.message_box.info(f"Threshold reverted to stored {label} = {value:.2f}")
  
 
 

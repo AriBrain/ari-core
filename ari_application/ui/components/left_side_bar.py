@@ -199,7 +199,7 @@ class LeftSideBar(QWidget):
             clusterlist_exists = 'clusterlist' in fileInfo[file_nr]
 
             if gradmap is True and clusterlist_exists:
-                self.brain_nav.message_box.log_message("<span style='color: orange;'>Warning: No clustermap computed for selected template, do you want to do this now?</span>")
+                self.brain_nav.message_box.warn("No clustermap computed for selected template, do you want to do this now?")
                 print("\033[38;5;214m"  # Orange terminal output
                       "Warning: No clustermap computed for selected template, do you want to compute it now?\033[0m")
                 
@@ -259,7 +259,7 @@ class LeftSideBar(QWidget):
             if method is not None:
                 self.brain_nav.WBTing.reset_threshold_slider(method)
 
-            self.brain_nav.message_box.log_message(f"<span style='color: white;'>Selected Map: {item_widget.file_name_label.text()}</span>")
+            self.brain_nav.message_box.info(f"Selected Map: {item_widget.file_name_label.text()}")
         else:
             print("No item selected")
 

@@ -141,7 +141,7 @@ class SaveAndExportTab(QWidget):
             with open(file_name, "wb") as file:
                 pickle.dump(project_data, file)
 
-            self.brain_nav.message_box.log_message(f"<span style='color: green;'>Project saved: {file_name}</span>")
+            self.brain_nav.message_box.info(f"Project saved: {file_name}")
 
     def load_project(self):
         """Load a previously saved .ari project file."""
@@ -189,7 +189,7 @@ class SaveAndExportTab(QWidget):
 
 
             self.brain_nav.UIHelp.refresh_ui()
-            self.brain_nav.message_box.log_message(f"<span style='color: green;'>Project loaded: {file_name}</span>")
+            self.brain_nav.message_box.info(f"Project loaded: {file_name}")
 
 
 
@@ -220,7 +220,7 @@ class SaveAndExportTab(QWidget):
             pdf_table_path = f"{dir_name}/ARI_report_table.pdf"
             self.save_html_table_as_pdf(tbl_text_html,pdf_table_path)
 
-            self.brain_nav.message_box.log_message(f"<span style='color: green;'>All results succesfully exported to: {dir_name} 😊</span>")
+            self.brain_nav.message_box.info(f"All results succesfully exported to: {dir_name} 😊")
 
     # def export_table_to_csv(self, file_path):
     #     """Exports the statistics table as a CSV file."""
@@ -238,10 +238,10 @@ class SaveAndExportTab(QWidget):
                 df = self.fileInfo[file_nr]['tblARI_df']
                 file_path = join(output_dir, f"cluster_table_{i+1}.csv")
                 df.to_csv(file_path, index=False)
-                self.brain_nav.message_box.log_message(f"Statistics table saved: {file_path}")
+                self.brain_nav.message_box.info(f"Statistics table saved: {file_path}")
 
             except KeyError as e:
-                self.brain_nav.message_box.log_message(f"<span style='color: orange;'>Skipping file_nr {file_nr}: missing field {e}</span>")
+                self.brain_nav.message_box.warn(f"Skipping file_nr {file_nr}: missing field {e}")
 
     def save_html_table_as_pdf(self, html_string, output_path="ARI_report_table.pdf"):
         document = QTextDocument()
@@ -254,7 +254,7 @@ class SaveAndExportTab(QWidget):
         printer.setPageMargins(15, 15, 15, 15, QPrinter.Millimeter)
 
         document.print_(printer)
-        self.brain_nav.message_box.log_message(f"HTML tabel saved as PDF: {output_path}")
+        self.brain_nav.message_box.info(f"HTML tabel saved as PDF: {output_path}")
 
 
     # def export_cluster_map(self, file_path):
@@ -300,15 +300,15 @@ class SaveAndExportTab(QWidget):
 
                 file_path = join(output_dir, f"cluster_map_{fn}_{i+1}.nii.gz")
                 nib.save(cluster_image, file_path)
-                self.brain_nav.message_box.log_message(f"Cluster map saved: {file_path}")
+                self.brain_nav.message_box.info(f"Cluster map saved: {file_path}")
 
             except KeyError as e:
-                self.brain_nav.message_box.log_message(f"<span style='color: orange;'>Skipping file_nr {file_nr}: missing field {e}</span>")
+                self.brain_nav.message_box.warn(f"Skipping file_nr {file_nr}: missing field {e}")
 
     def export_3d_visualization(self, file_path):
         """Saves a PNG screenshot of the 3D cluster visualization."""
         self.brain_nav.threeDviewer.cluster_3d_view.screenshot(file_path)
-        self.brain_nav.message_box.log_message(f"3D visualization saved: {file_path}")
+        self.brain_nav.message_box.info(f"3D visualization saved: {file_path}")
 
     def html_report(self, path='full_report.html'):
         """
@@ -572,7 +572,7 @@ class SaveAndExportTab(QWidget):
         with open(path, "w") as f:
             f.write(full_html)
 
-        self.brain_nav.message_box.log_message(f"HTML Report exported to {path}")
+        self.brain_nav.message_box.info(f"HTML Report exported to {path}")
 
         html_with_style = f"{styles}<caption>ARI Cluster Table</caption>{table_html}"
 
