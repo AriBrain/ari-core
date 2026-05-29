@@ -322,18 +322,24 @@ class WBTing(QWidget):
         Safely updates the threshold from the textbox input.
         This method is connected to the 'Run' button and the QLineEdit's returnPressed signal.
         """
+        raw_text = self.tdp_textbox1.text().strip()
+
+        # Silently no-op on empty input — pressing Enter on an empty textbox
+        # is almost always accidental and shouldn't pollute the message log.
+        if not raw_text:
+            self.tdp_textbox1.setText(f"{self.threshold_slider1.value() / 100:.2f}")
+            return
+
         try:
-            new_threshold = float(self.tdp_textbox1.text())
+            new_threshold = float(raw_text)
             # The sender will be either the textbox or the button.
             # We can call update_threshold_label directly, as it's designed to handle these senders.
             self.update_threshold_label(new_threshold)
         except ValueError:
-            invalid_text = self.tdp_textbox1.text()
-            print(f"[DEBUG] Invalid float entered in Whole Brain Threshold textbox: '{invalid_text}'")
             # Reset to the current slider value if input is invalid
             self.tdp_textbox1.setText(f"{self.threshold_slider1.value() / 100:.2f}")
             self.brain_nav.message_box.warn(
-                f"Invalid input: '{invalid_text}'. Please enter a valid number."
+                f"Invalid input: '{raw_text}'. Please enter a valid number."
             )
 
     def update_tdp_bounds(self):
@@ -416,17 +422,20 @@ class WBTing(QWidget):
         if selected_option == "TDP-based":
             min_bound = self.fileInfo[self.file_nr]['mintdp']
             max_bound = 1.0
+            unit_label = "TDP"
         elif selected_option == "Z-score based":
             min_bound = self.fileInfo[self.file_nr]['zmin']
             max_bound = self.fileInfo[self.file_nr]['zmax']
+            unit_label = "Z-score"
         else:
             # Fallback if some other thresholding option is introduced
-            min_bound, max_bound = 0.0, 1.0  
+            min_bound, max_bound = 0.0, 1.0
+            unit_label = "threshold"
 
         if sender == self.minus_button1 or sender == self.plus_button1:
             check_value = current_threshold + value
         elif sender == self.tdp_textbox1 or sender == self.reset_button2:
-            check_value = value 
+            check_value = value
         elif sender == self.threshold_slider1: #or sender == self.reset_button2:
             check_value = value / multiplier
         # this is included for re computing the cluster map when switching beteween templates.
@@ -434,27 +443,32 @@ class WBTing(QWidget):
         else:
             check_value = value / multiplier
 
-        # Check bounds — if outside, log message and return
+        # Check bounds — if outside, clamp and inform the user of the full valid
+        # range so they don't have to discover the upper end by trial and error.
         if check_value < min_bound:
             if sender == self.minus_button1 or sender == self.plus_button1:
                 value = 0
-            elif sender == self.tdp_textbox1: 
+            elif sender == self.tdp_textbox1:
                 value = min_bound
-            elif sender == self.threshold_slider1: #or sender == self.reset_button2:
-                value = min_bound 
+            elif sender == self.threshold_slider1:
+                value = min_bound
 
             self.brain_nav.message_box.warn(
-                f"Lower limit reached at {min_bound:.2f}, increase threshold value."
+                f"{check_value:.2f} is below the lower {unit_label} limit; "
+                f"using {min_bound:.2f} instead. "
+                f"Valid {unit_label} range for this map: [{min_bound:.2f}, {max_bound:.2f}]."
             )
         if check_value > max_bound:
             if sender == self.minus_button1 or sender == self.plus_button1:
                 value = 0
-            elif sender == self.tdp_textbox1: 
+            elif sender == self.tdp_textbox1:
                 value = max_bound
-            elif sender == self.threshold_slider1: #or sender == self.reset_button2:
-                value = max_bound 
+            elif sender == self.threshold_slider1:
+                value = max_bound
             self.brain_nav.message_box.warn(
-                f"Upper limit reached at {max_bound:.2f}, decrease threshold value."
+                f"{check_value:.2f} is above the upper {unit_label} limit; "
+                f"using {max_bound:.2f} instead. "
+                f"Valid {unit_label} range for this map: [{min_bound:.2f}, {max_bound:.2f}]."
             )
  
         # Block signals to prevent auto updates and infinite loops
@@ -506,14 +520,22 @@ class WBTing(QWidget):
             value = self.fileInfo[self.file_nr].get('tdp_threshold', 0.0)
             min_bound = self.fileInfo[self.file_nr].get('mintdp', 0.0)
             max_bound = 1.0
+            unit_label = "TDP"
         elif selected_option == "Z-score based":
             value = self.fileInfo[self.file_nr].get('zscore_threshold', 0.0)
             min_bound = self.fileInfo[self.file_nr].get('zmin', -10.0)
             max_bound = self.fileInfo[self.file_nr].get('zmax', 10.0)
+            unit_label = "Z-score"
         else:
             self.brain_nav.message_box.warn("Unknown thresholding method selected.")
             return
-        
+
+        # Tell the user the valid range up front so they don't discover the
+        # bounds by trial and error on the textbox/slider.
+        self.brain_nav.message_box.info(
+            f"Valid {unit_label} range for this map: [{min_bound:.2f}, {max_bound:.2f}]"
+        )
+
         self.brain_nav.initiate_tabs.advisory_text.setText(self.brain_nav.initiate_tabs.advisory_messages.get(selected_option, ""))
 
         # Block signals during UI update

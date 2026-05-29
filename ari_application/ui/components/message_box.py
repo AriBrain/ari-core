@@ -62,6 +62,10 @@ class MessageLogger(QWidget):
         # Show DEBUG entries in the UI? File logger always records them.
         self.debug_enabled = False
 
+        # Welcome banner is shown only on the first analysis of the session;
+        # subsequent statmaps get the session-info block alone.
+        self._welcome_shown = False
+
         self._file_logger = self._setup_file_logger()
 
         MessageLogger._active = self
@@ -355,14 +359,39 @@ class MessageLogger(QWidget):
             f"{key}: {value}" for key, value in analysis_settings.items()
         )
 
-        init_message = (
+        # Per-statmap session info. This is what gets pickled into fileInfo for
+        # the exported HTML report, so keep it tidy and free of UI chrome.
+        session_block = (
             f"<b>Session started at:</b> {timestamp}<br>"
             f"<b>Uploaded map type:</b> {map_type} with min TDP of: {mintdp}<br>"
             f"<b>Template:</b> {template}<br>"
             f"<b>Data directory:</b> {data_dir}<br>"
             f"<b>Analysis settings:</b> {analysis_settings_str}"
         )
+        self.brain_nav.fileInfo[file_nr]['init_message'] = session_block
 
-        self.brain_nav.fileInfo[file_nr]['init_message'] = init_message
-
-        self.info(init_message, html=True)
+        # Welcome + quick-tips banner shown only on the first analysis of a
+        # session; subsequent statmaps just get the session block above.
+        if not self._welcome_shown:
+            welcome_block = (
+                "<b style='color: #00cc66;'>Welcome to ARIbrain</b> "
+                "<span style='color: #888888;'>— All-Resolutions Inference for fMRI</span><br>"
+                "<br>"
+                "<b>Quick tips</b><br>"
+                "&nbsp;• Set the whole-brain threshold (TDP or Z-score) in the "
+                "<i>Thresholding</i> tab.<br>"
+                "&nbsp;• Click a cluster row in the table to focus the orthogonal "
+                "views and 3D viewer.<br>"
+                "&nbsp;• Use the TDP slider in the workstation to grow or shrink "
+                "the selected cluster; <i>Prev</i> / <i>Next</i> step through history.<br>"
+                "&nbsp;• Save or load a session as a <code>.ari</code> project from "
+                "the <i>Save &amp; Export</i> tab.<br>"
+                "&nbsp;• Messages tagged <span style='color: #ffa500;'>[WARN]</span> or "
+                "<span style='color: #ff6464;'>[ERROR]</span> are also written to "
+                "<code>~/.aribrain/aribrain.log</code>.<br>"
+                "<br>"
+            )
+            self.info(welcome_block + session_block, html=True)
+            self._welcome_shown = True
+        else:
+            self.info(session_block, html=True)
