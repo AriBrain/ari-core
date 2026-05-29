@@ -77,6 +77,14 @@ class NiftiLoader:
             image = nib.as_closest_canonical(image)
             data_out =  np.ascontiguousarray(image.get_fdata())
 
+            # Orientation mismatches between statmap and template are the most
+            # common cause of "the brain looks sideways" tickets — surface the
+            # loaded shape and axcodes so the user can sanity-check at a glance.
+            self.brain_nav.message_box.info(
+                f"Loaded statmap: {os.path.basename(fp)}, shape={data_out.shape}, "
+                f"orientation={''.join(nib.aff2axcodes(image.affine))}"
+            )
+
             # Initialize and set the statMap image and metadata in the BrainNav `templates` dictionary
             templates[file_nr_template] = {
                 'filename': os.path.basename(fp),       # Just the file name (e.g., 'activation_map.nii.gz')
@@ -134,7 +142,14 @@ class NiftiLoader:
             # Metrics.show_metrics(self.brain_nav)
             if hasattr(self, 'metrics'):
                 self.metrics.show_metrics()
-            OrthViewSetup(self.brain_nav).setup_viewer()
+            # When load_bg runs during BrainNav.__init__ the crosshair widgets
+            # don't exist yet (they're built later by init_panes()); skip then
+            # and let the legitimate setup_viewer() call at the end of __init__
+            # (or after ARI completes) do the work. When load_bg is called later
+            # — e.g. from UploadFiles.upload_template_dialog — the widgets exist
+            # and the call runs as intended.
+            if hasattr(self.brain_nav, 'axial_crosshair_h'):
+                OrthViewSetup(self.brain_nav).setup_viewer()
         
         except Exception as e:
             self.brain_nav.message_box.error(
