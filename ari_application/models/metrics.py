@@ -732,14 +732,18 @@ class Metrics:
         file_nr_template = self.brain_nav.file_nr_template
         lm_ids_df = self.brain_nav.fileInfo[file_nr]['stable_LM_ids_df']
 
-        # Handle the case where no clusters are found
+        # Handle the case where no clusters are found.
+        # show_modal_dialog never existed on BrainNav — this branch used to crash.
+        # Now: emit a structured warning, return a well-formed empty 4-tuple so
+        # callers' tuple-unpack doesn't blow up, and let them decide whether to
+        # clear the table or skip rendering.
         if clusterlist is None or len(clusterlist) == 0:
-            # Show a modal dialog to the user if no clusters were formed with the current threshold
-            self.brain_nav.show_modal_dialog(
-                "No clusters",
-                "No clusters can be formed with the given TDP threshold. Please reduce the threshold."
+            self.brain_nav.message_box.warn(
+                "No clusters available for this map/template — run thresholding "
+                "(TDP or Z-score) to populate the cluster table."
             )
-            return
+            empty_df = pd.DataFrame()
+            return [], np.empty((0, 0)), empty_df, np.empty((0, 3), dtype=int)
         # Get the number of clusters from the provided cluster list
         n = len(clusterlist)
         
