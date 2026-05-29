@@ -7,6 +7,7 @@ from PyQt5.QtGui import QPalette, QBrush, QPixmap, QFont, QImage, QColor
 from PyQt5.QtCore import Qt
 import os
 from ari_application.ui.main_window import BrainNav
+from ari_application.ui.components.save_and_export import PROJECT_FILE_FORMAT_VERSION
 import pickle
 
 
@@ -128,6 +129,8 @@ class StartWindow(QWidget):
             with open(file_name, "rb") as file:
                 project_data = pickle.load(file)
 
+            saved_version = project_data.get('version')
+
             # Unpack saved data
             fileInfo             = project_data['fileInfo']
             atlasInfo            = project_data['atlasInfo']
@@ -164,6 +167,25 @@ class StartWindow(QWidget):
 
             # Create and show the main window
             self.main_window = BrainNav(start_input, load_data=True, data2load=data_package)
+
+            # MessageLogger buffers pre-init writes, so these surface in the UI
+            # log once init_message_box() runs during BrainNav.__init__.
+            if saved_version is None:
+                self.main_window.message_box.warn(
+                    f"Project file has no version tag (expected {PROJECT_FILE_FORMAT_VERSION}); "
+                    "some fields may load with defaults."
+                )
+            elif saved_version != PROJECT_FILE_FORMAT_VERSION:
+                self.main_window.message_box.warn(
+                    f"Project file format version {saved_version} differs from current "
+                    f"{PROJECT_FILE_FORMAT_VERSION}; some fields may not restore cleanly."
+                )
+            self.main_window.message_box.info(
+                f"Project loaded: {os.path.basename(file_name)} "
+                f"({len(fileInfo)} statmaps, {len(templates)} templates, "
+                f"{len(atlasInfo)} atlas entries)"
+            )
+
             self.main_window.show()
             self.close()
             

@@ -6,6 +6,13 @@ import pickle
 import base64
 import nibabel as nib  # Required for handling NIfTI files
 
+
+# Bump when the on-disk schema of a .ari project file changes in a way that
+# can't be transparently restored from older versions. Loaders compare against
+# this and warn the user if the saved version is higher (forward-incompatible)
+# or lower (defaults may have been used to fill missing fields).
+PROJECT_FILE_FORMAT_VERSION = 1
+
 class SaveAndExportTab(QWidget):
     """
     A modular class that encapsulates the functionality of the 'Save & Export' tab 
@@ -121,6 +128,7 @@ class SaveAndExportTab(QWidget):
                 file_name += ".ari"
 
             project_data = {
+                'version': PROJECT_FILE_FORMAT_VERSION,
                 'fileInfo': self.brain_nav.fileInfo,
                 'atlasInfo': self.brain_nav.atlasInfo,
                 'file_nr': self.brain_nav.file_nr,
@@ -132,7 +140,7 @@ class SaveAndExportTab(QWidget):
                 'statmap_templates': self.brain_nav.statmap_templates,
                 'start_input': self.brain_nav.start_input,
                 'templates': self.brain_nav.templates,
-                'template_names': [self.brain_nav.left_side_bar.template_list.item(i).text() 
+                'template_names': [self.brain_nav.left_side_bar.template_list.item(i).text()
                                 for i in range(self.brain_nav.left_side_bar.template_list.count())],
                 'stat_image_names': [w.file_name_label.text() for w in self.brain_nav.stat_image_items],
                 'ranges': self.brain_nav.ranges
@@ -155,6 +163,18 @@ class SaveAndExportTab(QWidget):
         if file_name:
             with open(file_name, "rb") as file:
                 project_data = pickle.load(file)
+
+            saved_version = project_data.get('version')
+            if saved_version is None:
+                self.brain_nav.message_box.warn(
+                    f"Project file has no version tag (expected {PROJECT_FILE_FORMAT_VERSION}); "
+                    "some fields may load with defaults."
+                )
+            elif saved_version != PROJECT_FILE_FORMAT_VERSION:
+                self.brain_nav.message_box.warn(
+                    f"Project file format version {saved_version} differs from current "
+                    f"{PROJECT_FILE_FORMAT_VERSION}; some fields may not restore cleanly."
+                )
 
             self.brain_nav.fileInfo             = project_data['fileInfo']
 
@@ -189,7 +209,12 @@ class SaveAndExportTab(QWidget):
 
 
             self.brain_nav.UIHelp.refresh_ui()
-            self.brain_nav.message_box.info(f"Project loaded: {file_name}")
+            self.brain_nav.message_box.info(
+                f"Project loaded: {file_name} "
+                f"({len(self.brain_nav.fileInfo)} statmaps, "
+                f"{len(self.brain_nav.templates)} templates, "
+                f"{len(self.brain_nav.atlasInfo)} atlas entries)"
+            )
 
 
 
