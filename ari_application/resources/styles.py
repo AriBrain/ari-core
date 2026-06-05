@@ -45,7 +45,31 @@ class Styles:
                 background-color: #a9a9a9;  /* Change background color on hover */
             }
         """
-    
+
+    # Wider variant of overlay_button_styling — used for the Whole Brain TDP
+    # tab atlas section, where labels like "Run ROI Analysis" don't fit in the
+    # 60px cap. Also styles the disabled state so a greyed-out button reads as
+    # intentional rather than broken.
+    atlas_button_styling = """
+            QPushButton {
+                border: 2px solid #a9cfbd;
+                border-radius: 5px;
+                padding: 6px 12px;
+                background-color: #808080;
+                font-size: 11px;
+                color: white;
+                min-width: 120px;
+            }
+            QPushButton:hover {
+                background-color: #a9a9a9;
+            }
+            QPushButton:disabled {
+                background-color: #555555;
+                color: #999999;
+                border-color: #666666;
+            }
+        """
+
     runARI_button_styling = """
             QPushButton {
                 border: 2px solid #a9cfbd;  /* Set border color and width */

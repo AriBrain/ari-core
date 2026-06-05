@@ -95,7 +95,6 @@ class UploadFiles:
                 self.brain_nav.left_side_bar.add_statmap_to_list(file_path)
                 self.brain_nav.tblARI.clear_table()
 
-                
                 # New statmap is loaded, so we need to run ARI
                 self.brain_nav.ARI.runARI()
                 

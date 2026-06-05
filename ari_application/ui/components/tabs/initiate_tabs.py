@@ -2,11 +2,15 @@
 from PyQt5.QtGui import QFont
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTabWidget, QComboBox, QTextEdit, 
-    QSizePolicy, QSpacerItem, QTableWidget, QHeaderView, QGraphicsDropShadowEffect
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTabWidget, QComboBox, QTextEdit,
+    QSizePolicy, QSpacerItem, QTableWidget, QHeaderView, QGraphicsDropShadowEffect,
+    QPushButton
 )
 from PyQt5.QtGui import QFont, QColor
 from PyQt5.QtCore import Qt, pyqtSignal
+
+from ari_application.resources.styles import Styles
+
 
 class InitiateTabs(QWidget):
     """
@@ -106,8 +110,34 @@ class InitiateTabs(QWidget):
         
         self.advisory_text.setFixedHeight(60)
 
-        # Initiate the whole brain tdp slider. 
+        # Initiate the whole brain tdp slider.
         self.threshold_container1 = self.brain_nav.WBTing.whole_brain_tdp_slider() # -> self.threshold_container1
+
+        # **Atlas section — visible only when "Anatomical Atlas" is selected in
+        # the dropdown above. Holds the upload button and the run-analysis
+        # button. Visibility is toggled by WBTing.update_threshold_option.**
+        self.atlas_section = QWidget()
+        atlas_section_layout = QHBoxLayout()
+        atlas_section_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.atlas_upload_button = QPushButton("Upload Atlas")
+        self.atlas_upload_button.setCursor(Qt.PointingHandCursor)
+        self.atlas_upload_button.setStyleSheet(Styles.atlas_button_styling)
+        self.atlas_upload_button.clicked.connect(self._on_atlas_upload_clicked)
+
+        self.atlas_run_button = QPushButton("Run ROI Analysis")
+        self.atlas_run_button.setCursor(Qt.PointingHandCursor)
+        self.atlas_run_button.setStyleSheet(Styles.atlas_button_styling)
+        # Disabled until an atlas is loaded; the loader (later phase) will
+        # enable it.
+        self.atlas_run_button.setEnabled(False)
+        self.atlas_run_button.clicked.connect(self._on_atlas_run_clicked)
+
+        atlas_section_layout.addWidget(self.atlas_upload_button)
+        atlas_section_layout.addWidget(self.atlas_run_button)
+        atlas_section_layout.addStretch()
+        self.atlas_section.setLayout(atlas_section_layout)
+        self.atlas_section.setVisible(False)
 
         # # **Atlas selection dropdown or file selection**
         # self.atlas_dropdown = QComboBox()
@@ -135,6 +165,7 @@ class InitiateTabs(QWidget):
         whole_brain_layout.addLayout(threshold_layout)
         whole_brain_layout.addWidget(self.advisory_text)
         whole_brain_layout.addWidget(self.threshold_container1)
+        whole_brain_layout.addWidget(self.atlas_section)
         whole_brain_layout.addSpacing(10)  # Adds a little space before the next elements
 
         self.init_metrics_container()  # Initialize the metrics container layout
@@ -215,6 +246,18 @@ class InitiateTabs(QWidget):
 
         return self.table_container
 
+
+    def _on_atlas_upload_clicked(self):
+        """Placeholder for the atlas upload flow (loader lands in a later commit)."""
+        self.brain_nav.message_box.log_message(
+            "Atlas upload clicked — loader not implemented yet."
+        )
+
+    def _on_atlas_run_clicked(self):
+        """Placeholder for the ROI-TDP run (computation lands in a later commit)."""
+        self.brain_nav.message_box.log_message(
+            "Run ROI Analysis clicked — computation not implemented yet."
+        )
 
     def init_metrics_container(self):
         # Create the metrics layout
