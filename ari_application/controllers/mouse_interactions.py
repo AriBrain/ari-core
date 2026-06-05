@@ -362,16 +362,37 @@ class MouseInteractions(QObject):
         menu.exec_(event.screenPos())
 
 
+    def _get_cluster_table_or_warn(self):
+        """
+        Return the current statmap's cluster table, or None if thresholding
+        hasn't run yet. The 'Select Cluster' actions only make sense once a
+        cluster map exists; before that, ARI has computed Hommel but no
+        clusters have been formed, so tblARI_df doesn't exist on fileInfo.
+        """
+        file_nr = self.brain_nav.file_nr
+        file_info = self.brain_nav.fileInfo.get(file_nr, {})
+        if 'tblARI_df' not in file_info:
+            self.brain_nav.message_box.warn(
+                "No cluster table available yet — run thresholding "
+                "(TDP-based or Z-score based) from the Thresholding tab "
+                "before selecting a cluster."
+            )
+            return None
+        return file_info['tblARI_df']
+
     def select_cluster_xyz(self, event, source):
         """
         Select the cluster based on the crosshair position and update the tables.
-        
+
         :param event: The mouse event.
         :param source: The source of the event (axial, sagittal, coronal).
         """
+        data_table = self._get_cluster_table_or_warn()
+        if data_table is None:
+            return
+
         file_nr = self.brain_nav.file_nr
         file_nr_template = self.brain_nav.file_nr_template
-        data_table = self.brain_nav.fileInfo[file_nr]['tblARI_df']
 
         x_ui = self.brain_nav.sagittal_slice 
         y_ui = self.brain_nav.coronal_slice
@@ -409,16 +430,19 @@ class MouseInteractions(QObject):
 
     def select_cluster_LM(self, event, source):
         """
-        Select the local minimum of the cluster based on the crosshair position 
+        Select the local minimum of the cluster based on the crosshair position
         and update the tables and view.
 
         Parameters:
             event: The mouse event.
             source: The source of the event (axial, sagittal, coronal).
         """
+        data_table = self._get_cluster_table_or_warn()
+        if data_table is None:
+            return
+
         file_nr = self.brain_nav.file_nr
         file_nr_template = self.brain_nav.file_nr_template
-        data_table = self.brain_nav.fileInfo[file_nr]['tblARI_df']
 
         # Get the current crosshair position in UI space
         x_ui = self.brain_nav.sagittal_slice
