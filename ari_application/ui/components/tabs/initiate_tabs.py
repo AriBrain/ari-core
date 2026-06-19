@@ -248,13 +248,15 @@ class InitiateTabs(QWidget):
 
 
     def _on_atlas_upload_clicked(self):
-        """Placeholder for the atlas upload flow (loader lands in a later commit)."""
-        self.brain_nav.message_box.log_message(
-            "Atlas upload clicked — loader not implemented yet."
-        )
+        """
+        Hand off to UploadFiles.upload_atlas_dialog, which runs the file
+        picker, the loader, and flips the orthoviews into atlas-overlay
+        verification mode on success.
+        """
+        self.brain_nav.upload_files.upload_atlas_dialog()
 
     def _on_atlas_run_clicked(self):
-        """Placeholder for the ROI-TDP run (computation lands in a later commit)."""
+        """Placeholder for the ROI-TDP run (computation lands in step 4)."""
         self.brain_nav.message_box.log_message(
             "Run ROI Analysis clicked — computation not implemented yet."
         )

@@ -158,6 +158,24 @@ class ImageProcessing:
         return data, intermediate_image, combined_affine
 
     @staticmethod
+    def align_label_volume(template_image, label_image):
+        """
+        Resample an integer-labelled volume (atlas, ROI map, cluster map)
+        onto another image's grid using nearest-neighbour interpolation, then
+        run it through the same transpose + rotate chain the loader uses for
+        AAL2. Returns the rotated nib.Nifti1Image — callers decide whether to
+        extract the data as float (for downstream NIfTI manipulation) or as
+        int (for direct LUT indexing).
+
+        Wraps align_images(order=0) + transpose_image + rotate_volume so
+        atlas-loading paths don't have to duplicate the three-step chain.
+        """
+        aligned_img, _ = ImageProcessing.align_images(template_image, label_image, order=0)
+        tr_img = ImageProcessing.transpose_image(aligned_img)
+        _, rtr_img, _ = ImageProcessing.rotate_volume(tr_img)
+        return rtr_img
+
+    @staticmethod
     def align_images(bg_image, overlay_image, overlay_affine=None, order = 1):
         """
         Aligns the overlay image to the background image using affine transformations based on header information.

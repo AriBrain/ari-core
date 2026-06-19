@@ -125,5 +125,32 @@ class UploadFiles:
                 self.error_handler.handle_exception(e)
 
     def upload_atlas_dialog(self):
-        # here upload user atlas routine needs to be defined. 
-        pass
+        """
+        Pick a user atlas NIfTI, hand off to NiftiLoader.load_user_atlas, and
+        on success flip the orthoviews into 'atlas' overlay mode so the user
+        can visually verify alignment before running ROI TDPs.
+        """
+        options = QFileDialog.Options()
+        file_path, _ = QFileDialog.getOpenFileName(
+            self.brain_nav, "Upload Atlas File", "",
+            "NIfTI Files (*.nii *.nii.gz);;All Files (*)",
+            options=options,
+        )
+        if not file_path:
+            return
+
+        self.logger.info(f"Atlas file selected: {file_path}")
+        try:
+            ok = self.brain_nav.nifti_loader.load_user_atlas(file_path)
+        except Exception as e:
+            self.error_handler.handle_exception(e)
+            return
+
+        if not ok:
+            return
+
+        # Switch the overlay layer to the atlas for verification. Enable the
+        # Run ROI Analysis button now that an atlas is available.
+        self.brain_nav.ui_params['overlay_mode'] = 'atlas'
+        self.brain_nav.initiate_tabs.atlas_run_button.setEnabled(True)
+        self.brain_nav.orth_view_update.update_slices()

@@ -115,7 +115,13 @@ class BrainNav(QMainWindow):
         if load_data == False:
             self.fileInfo = {}
             self.atlasInfo = {}
-            self.file_nr = 0  
+            # User-uploaded atlas (Phase 1 of docs/ATLAS_TDP_PLAN.md). Keyed
+            # the same way as atlasInfo: int file_nr_template for built-in
+            # templates, ('data_as_template', file_nr) for the statmap-as-
+            # template case. Empty until UploadFiles.upload_atlas_dialog
+            # runs the loader.
+            self.userAtlasInfo = {}
+            self.file_nr = 0
             self.file_nr_template = 0
             self.templates = {}
             self.statmap_templates = {}
@@ -132,7 +138,13 @@ class BrainNav(QMainWindow):
                 'selected_row': [],
                 'selected_cluster_id': [],
                 'gradmap': True,
-                '3d_brain_data' : None
+                '3d_brain_data' : None,
+                # Drives OrthViewUpdate.update_slices: 'cluster' renders the
+                # ARI cluster overlay (default), 'atlas' renders the
+                # user-uploaded atlas for visual verification, 'roi' will be
+                # used post-analysis to highlight a selected ROI.
+                'overlay_mode': 'cluster',
+                'selected_roi_label': None,
             }
 
             # Load Nifti Overlay (Ensures Data is Loaded)
@@ -154,12 +166,20 @@ class BrainNav(QMainWindow):
         else:
             self.fileInfo               = data2load['fileInfo']
             self.atlasInfo              = data2load['atlasInfo']
+            # Older .ari files predate userAtlasInfo — default to empty so
+            # the load path doesn't KeyError on legacy projects.
+            self.userAtlasInfo          = data2load.get('userAtlasInfo', {})
             self.file_nr                = data2load['file_nr']
             self.file_nr_template       = data2load['file_nr_template']
             self.data_bg_index          = data2load['data_bg_index']
             self.templates              = data2load['templates']
             self.statmap_templates      = data2load['statmap_templates']
             self.ui_params              = data2load['ui_params']
+            # Backfill keys that older .ari saves don't include, so the
+            # overlay-mode branching in OrthViewUpdate.update_slices doesn't
+            # KeyError on legacy projects.
+            self.ui_params.setdefault('overlay_mode', 'cluster')
+            self.ui_params.setdefault('selected_roi_label', None)
             self.aligned_statMapInfo    = data2load['aligned_statMapInfo']
             self.aligned_templateInfo   = data2load['aligned_templateInfo']
             self.stat_image_items       = [] # This is not saved in the pickle file but needed when handling more than one statmap sessions        

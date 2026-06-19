@@ -135,8 +135,19 @@ class OrthViewUpdate:
         # Use dict.get to safely access the nested structure
         # statmap_entry = self.brain_nav.statmaps.get(self.brain_nav.file_nr, {})
         statmap_entry = self.brain_nav.aligned_statMapInfo.get((self.brain_nav.file_nr, self.brain_nav.file_nr_template), {})
-        
-        if 'overlay_data' in statmap_entry:
+
+        # Three overlay modes — cluster (the original ARI overlay), atlas
+        # (verification view for the user-uploaded atlas), and roi (post-
+        # analysis selection view, lands in step 5). See
+        # docs/ATLAS_TDP_PLAN.md §4.3.
+        overlay_mode = self.brain_nav.ui_params.get('overlay_mode', 'cluster')
+
+        if overlay_mode in ('atlas', 'roi') and self._has_user_atlas_for_active_view():
+            self.add_atlas_overlay(
+                highlight_label=self.brain_nav.ui_params.get('selected_roi_label')
+                if overlay_mode == 'roi' else None
+            )
+        elif 'overlay_data' in statmap_entry:
             self.add_overlay_with_transparency(selected_cluster_id)
             # self.update_crosshairs()
         else:
@@ -379,6 +390,87 @@ class OrthViewUpdate:
         self.brain_nav.sagittal_view.addItem(self.sagittal_overlay_item)
         self.brain_nav.coronal_view.addItem(self.coronal_overlay_item)
             
+    def _active_atlas_key(self):
+        """
+        Returns the userAtlasInfo key for the currently selected template,
+        matching the keying convention used by atlasInfo (int file_nr_template
+        for normal templates, ('data_as_template', file_nr) for the
+        statmap-as-template case). Returns None when the data-as-template
+        index has been set but the user is viewing it.
+        """
+        file_nr = self.brain_nav.file_nr
+        file_nr_template = self.brain_nav.file_nr_template
+        data_bg_index = getattr(self.brain_nav, 'data_bg_index', None)
+        if data_bg_index is not None and file_nr_template == data_bg_index:
+            return ('data_as_template', file_nr)
+        return file_nr_template
+
+    def _has_user_atlas_for_active_view(self):
+        key = self._active_atlas_key()
+        return key in self.brain_nav.userAtlasInfo
+
+    def add_atlas_overlay(self, highlight_label=None):
+        """
+        Render the user-uploaded atlas as a coloured overlay over the current
+        template, one stable colour per ROI label. When highlight_label is
+        not None, that label keeps full alpha and the rest are dimmed so a
+        selected ROI stands out (used by the 'roi' overlay mode).
+
+        Mirrors the contract of add_overlay_with_transparency: builds three
+        per-slice pg.ImageItems via np.take(lut, slice, axis=0) so the LUT
+        does the colouring and pyqtgraph just blits RGBA. The atlas volume
+        was already resampled onto the template grid by load_user_atlas, so
+        no per-call resampling needed.
+        """
+        # Drop any previous overlay items so we don't stack.
+        if self.axial_overlay_item:
+            self.brain_nav.axial_view.removeItem(self.axial_overlay_item)
+        if self.sagittal_overlay_item:
+            self.brain_nav.sagittal_view.removeItem(self.sagittal_overlay_item)
+        if self.coronal_overlay_item:
+            self.brain_nav.coronal_view.removeItem(self.coronal_overlay_item)
+
+        atlas_entry = self.brain_nav.userAtlasInfo[self._active_atlas_key()]
+        atlas_vol = atlas_entry['data']
+        lut = atlas_entry['lut'].copy()  # copy so highlight tweaks don't persist
+
+        # Highlight mode: dim every non-selected label so the selected one
+        # pops. Matches the cluster-overlay selection styling.
+        if highlight_label is not None:
+            dim_alpha = int(0.25 * 255)
+            full_alpha = 255
+            # Only touch rows where alpha > 0 (i.e. actual ROI rows).
+            roi_rows = lut[:, 3] > 0
+            lut[roi_rows, 3] = dim_alpha
+            if 0 <= highlight_label < lut.shape[0]:
+                lut[highlight_label, 3] = full_alpha
+
+        template_data = self.brain_nav.templates[self.brain_nav.file_nr_template]['data']
+
+        if template_data.flags['C_CONTIGUOUS']:
+            axial_slice = atlas_vol[:, :, self.brain_nav.axial_slice].astype(int)
+            sagittal_slice = atlas_vol[self.brain_nav.sagittal_slice, :, :].astype(int)
+            coronal_slice = atlas_vol[:, self.brain_nav.coronal_slice, :].astype(int)
+        else:
+            axial_slice = atlas_vol[self.brain_nav.axial_slice, :, :].astype(int)
+            sagittal_slice = atlas_vol[:, :, self.brain_nav.sagittal_slice].astype(int)
+            coronal_slice = atlas_vol[:, self.brain_nav.coronal_slice, :].astype(int)
+
+        # Clamp to LUT range — defensive, in case the atlas has a stray label
+        # outside what _build_atlas_lut sized for.
+        max_idx = lut.shape[0] - 1
+        axial_slice = np.clip(axial_slice, 0, max_idx)
+        sagittal_slice = np.clip(sagittal_slice, 0, max_idx)
+        coronal_slice = np.clip(coronal_slice, 0, max_idx)
+
+        self.axial_overlay_item = pg.ImageItem(np.take(lut, axial_slice, axis=0))
+        self.sagittal_overlay_item = pg.ImageItem(np.take(lut, sagittal_slice, axis=0))
+        self.coronal_overlay_item = pg.ImageItem(np.take(lut, coronal_slice, axis=0))
+
+        self.brain_nav.axial_view.addItem(self.axial_overlay_item)
+        self.brain_nav.sagittal_view.addItem(self.sagittal_overlay_item)
+        self.brain_nav.coronal_view.addItem(self.coronal_overlay_item)
+
     def create_custom_lut(self, colormap='hot', alpha=0.5, selected_cluster_id=None, overlay=None):
         """
         Create a custom LUT (Lookup Table) with transparency for non-cluster voxels.

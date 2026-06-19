@@ -219,6 +219,199 @@ class NiftiLoader:
         self.brain_nav.templates[file_nr_template]['data'] = data_out
         self.brain_nav.templates[file_nr_template]['original_bg_affine'] = image.affine    
 
+    @staticmethod
+    def parse_atlas_codebook(codebook_path):
+        """
+        Parse an AAL2-style codebook text file. Each line has the shape
+        `<row_id> <name_token(s)> <int_label>` (at least three whitespace-
+        separated columns). Returns {int_label: title_cased_name}.
+
+        Logic is byte-for-byte the same as the previous inline parser inside
+        load_atlases — preserved verbatim so the AAL2 codebook still parses
+        identically after this refactor. Callers that need a fallback on
+        malformed files should wrap in try/except.
+        """
+        codebook = {}
+        with open(codebook_path, 'r') as f:
+            for line in f:
+                parts = line.strip().split()
+                if len(parts) >= 3:
+                    code = int(parts[2])  # e.g., 2001
+                    name = ' '.join(parts[1:-1]) if len(parts) > 3 else parts[1]
+                    name = name.replace('_', ' ').title()
+                    codebook[code] = name
+        return codebook
+
+    def load_user_atlas(self, file_path):
+        """
+        Load a user-supplied atlas NIfTI (integer-labelled ROI map) and align
+        it to every loaded template — and to every statmap-as-template entry
+        — so it survives template switches without re-aligning.
+
+        Mirrors load_atlases (which is hardcoded to AAL2) but:
+          - Takes the path from the UI instead of from disk-bundled assets.
+          - Auto-generates a codebook from the unique non-zero labels when no
+            AAL2-style sidecar .txt is found next to the file.
+          - Builds a stable RGBA LUT sized to max(label)+1 so np.take(lut,
+            atlas_slice, axis=0) renders directly through the existing overlay
+            pipeline.
+          - Stores under self.brain_nav.userAtlasInfo (keyed the same way as
+            atlasInfo) so it lives alongside AAL2 without colliding.
+
+        On failure, logs to the in-app message box and returns False so the
+        caller can decide whether to flip UI state. Returns True on success.
+        """
+        try:
+            atlas_img = nib.load(file_path)
+        except Exception as e:
+            self.brain_nav.message_box.log_message(
+                f"<span style='color: red;'>Failed to load atlas: {e}</span>"
+            )
+            return False
+
+        atlas_img = nib.as_closest_canonical(atlas_img)
+        atlas_data = atlas_img.get_fdata()
+
+        if atlas_data.ndim != 3:
+            self.brain_nav.message_box.log_message(
+                f"<span style='color: red;'>Atlas must be 3D, got shape "
+                f"{atlas_data.shape}.</span>"
+            )
+            return False
+
+        unique_labels = np.unique(atlas_data[atlas_data > 0])
+        if unique_labels.size == 0:
+            self.brain_nav.message_box.log_message(
+                "<span style='color: red;'>Atlas has no non-zero voxels — "
+                "nothing to label.</span>"
+            )
+            return False
+
+        # Round to nearest int before casting, in case the NIfTI is float32
+        # (AAL2 is — labels arrive as 2001.0, etc.).
+        unique_labels = np.round(unique_labels).astype(int)
+        labels_set = set(unique_labels.tolist())
+
+        # Codebook: sidecar .txt in AAL2 format if present, else auto-generate.
+        codebook = self._load_atlas_codebook(file_path, labels_set)
+
+        # Stable LUT sized to max(label)+1. Most rows stay transparent; only
+        # ROI rows get an HSV-cycled colour. Alpha is set to brain_nav.alpha
+        # so it matches the cluster overlay's transparency.
+        lut = self._build_atlas_lut(unique_labels)
+
+        # Align against every template + every statmap-as-template entry.
+        # alignment uses order=0 (nearest-neighbour) to preserve integer
+        # labels — the same call load_atlases makes for AAL2.
+        n_template_alignments = 0
+        for template_key, template_entry in self.brain_nav.templates.items():
+            template_image = template_entry.get('image')
+            if template_image is None:
+                continue
+            aligned = self._align_atlas_to_template(atlas_img, template_image)
+            self.brain_nav.userAtlasInfo[template_key] = {
+                'filename': os.path.basename(file_path),
+                'full_path': file_path,
+                'data': aligned,
+                'codebook': codebook,
+                'lut': lut,
+                'original_affine': atlas_img.affine,
+                'tdps_per_roi': None,
+            }
+            n_template_alignments += 1
+
+        for file_nr, stm in self.brain_nav.statmap_templates.items():
+            template_image = stm.get('image')
+            if template_image is None:
+                continue
+            aligned = self._align_atlas_to_template(atlas_img, template_image)
+            self.brain_nav.userAtlasInfo[('data_as_template', file_nr)] = {
+                'filename': os.path.basename(file_path),
+                'full_path': file_path,
+                'data': aligned,
+                'codebook': codebook,
+                'lut': lut,
+                'original_affine': atlas_img.affine,
+                'tdps_per_roi': None,
+            }
+            n_template_alignments += 1
+
+        self.brain_nav.message_box.log_message(
+            f"<span style='color: lightgreen;'>Atlas loaded: "
+            f"{os.path.basename(file_path)} — {len(unique_labels)} ROIs, "
+            f"aligned to {n_template_alignments} template(s).</span>"
+        )
+        return True
+
+    def _load_atlas_codebook(self, atlas_path, labels_set):
+        """
+        Look for a sidecar `<basename>.txt` in the AAL2 codebook format next
+        to the atlas NIfTI; parse it via the shared parse_atlas_codebook
+        helper if it exists, and fill in `ROI <n>` defaults for any labels
+        missing from the codebook (or for all labels if there's no sidecar).
+
+        labels_set is the set of integer labels actually present in the
+        atlas — used to know which `ROI <n>` defaults to insert.
+        """
+        codebook = {}
+        sidecar = os.path.splitext(atlas_path)[0] + '.txt'
+        # .nii.gz strips only the .gz on the first splitext call.
+        if sidecar.endswith('.nii'):
+            sidecar = sidecar[:-len('.nii')] + '.txt'
+
+        if os.path.exists(sidecar):
+            try:
+                codebook = NiftiLoader.parse_atlas_codebook(sidecar)
+            except Exception as e:
+                self.brain_nav.message_box.log_message(
+                    f"<span style='color: orange;'>Codebook sidecar exists "
+                    f"but failed to parse ({e}); using auto-generated names."
+                    f"</span>"
+                )
+                codebook = {}
+
+        # Fill any missing labels with a default ROI <n> name.
+        for lbl in labels_set:
+            codebook.setdefault(int(lbl), f"ROI {int(lbl)}")
+        return codebook
+
+    def _build_atlas_lut(self, unique_labels):
+        """
+        Build a (max_label + 1, 4) uint8 RGBA LUT with a deterministic
+        HSV-cycled palette. Row 0 and any label not present in the atlas
+        stay transparent. Sized so np.take(lut, atlas_volume, axis=0)
+        works directly — same shape contract as fileInfo['custom_lut']
+        after the background-row insertion that add_overlay_with_transparency
+        performs.
+        """
+        import colorsys
+
+        max_label = int(unique_labels.max())
+        lut = np.zeros((max_label + 1, 4), dtype=np.uint8)
+        alpha_byte = int(self.brain_nav.alpha * 255)
+
+        # Deterministic colour-cycling. Use a golden-ratio hue step so adjacent
+        # ROIs get visually distinct colours without us having to randomise.
+        golden = 0.61803398875
+        for i, lbl in enumerate(unique_labels.tolist()):
+            h = (i * golden) % 1.0
+            r, g, b = colorsys.hsv_to_rgb(h, 0.75, 0.95)
+            lut[int(lbl)] = [int(r * 255), int(g * 255), int(b * 255), alpha_byte]
+        return lut
+
+    def _align_atlas_to_template(self, atlas_img, template_image):
+        """
+        Resample atlas_img onto template_image's grid via the shared
+        align_label_volume helper, then round-trip the resampled volume
+        through int32 to drop any float drift from nearest-neighbour
+        resampling. The int cast is the only thing user atlases need that
+        the AAL2 path doesn't — AAL2 stores its data as float.
+        """
+        rtr_img = ImageProcessing.align_label_volume(template_image, atlas_img)
+        return np.ascontiguousarray(
+            np.round(rtr_img.get_fdata()).astype(np.int32)
+        )
+
     def load_atlases(self, image, file_nr_template):
         """
         Load and align atlas data with the given template image.
@@ -237,20 +430,12 @@ class NiftiLoader:
         codebook_path               = os.path.join(os.path.dirname(__file__), '..', 'public/atlases/AAL2/AAL2_CodeBook.txt')
         atlas_img                   = nib.load(atlas_path)
         atlas_img                   = nib.as_closest_canonical(atlas_img)
-        a_atlas_image, _            = ImageProcessing.align_images(image, atlas_img, order=0)
-        tr_atlas_img                = ImageProcessing.transpose_image(a_atlas_image)
-        _, rtr_atlas_img, _         = ImageProcessing.rotate_volume(tr_atlas_img)
 
-        # codebook
-        codebook = {}
-        with open(codebook_path, 'r') as f:
-            for line in f:
-                parts = line.strip().split()
-                if len(parts) >= 3:
-                    code = int(parts[2])  # e.g., 2001
-                    name = ' '.join(parts[1:-1]) if len(parts) > 3 else parts[1]
-                    name = name.replace('_', ' ').title() 
-                    codebook[code] = name
+        # align + transpose + rotate (shared with the user-atlas path)
+        rtr_atlas_img = ImageProcessing.align_label_volume(image, atlas_img)
+
+        # codebook (shared parser; identical logic to the previous inline loop)
+        codebook = NiftiLoader.parse_atlas_codebook(codebook_path)
 
         # atlasInfo['image'] = rtr_atlas_img
         atlasInfo['data'] = np.ascontiguousarray(rtr_atlas_img.get_fdata())
