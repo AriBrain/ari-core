@@ -434,16 +434,25 @@ class OrthViewUpdate:
         atlas_vol = atlas_entry['data']
         lut = atlas_entry['lut'].copy()  # copy so highlight tweaks don't persist
 
+        # Apply the live opacity from the orthview alpha slider. The LUT
+        # bakes in the alpha at load time, so without this the atlas overlay
+        # ignores later slider moves. Only ROI rows (alpha > 0) are touched,
+        # keeping the background row transparent.
+        roi_rows = lut[:, 3] > 0
+        slider_alpha = int(self.brain_nav.alpha * 255)
+
         # Highlight mode: dim every non-selected label so the selected one
         # pops. Matches the cluster-overlay selection styling.
         if highlight_label is not None:
-            dim_alpha = int(0.25 * 255)
-            full_alpha = 255
-            # Only touch rows where alpha > 0 (i.e. actual ROI rows).
-            roi_rows = lut[:, 3] > 0
+            # Selected ROI at full opacity, the rest dimmed relative to the
+            # current slider level so the slider still has an effect.
+            dim_alpha = int(0.4 * self.brain_nav.alpha * 255)
             lut[roi_rows, 3] = dim_alpha
             if 0 <= highlight_label < lut.shape[0]:
-                lut[highlight_label, 3] = full_alpha
+                lut[highlight_label, 3] = 255
+        else:
+            # Verification view: every ROI at the slider's opacity.
+            lut[roi_rows, 3] = slider_alpha
 
         template_data = self.brain_nav.templates[self.brain_nav.file_nr_template]['data']
 
