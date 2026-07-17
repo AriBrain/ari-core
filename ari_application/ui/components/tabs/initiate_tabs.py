@@ -4,12 +4,9 @@ from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTabWidget, QComboBox, QTextEdit,
     QSizePolicy, QSpacerItem, QTableWidget, QHeaderView, QGraphicsDropShadowEffect,
-    QPushButton
 )
 from PyQt5.QtGui import QFont, QColor
 from PyQt5.QtCore import Qt, pyqtSignal
-
-from ari_application.resources.styles import Styles
 
 
 class InitiateTabs(QWidget):
@@ -78,9 +75,13 @@ class InitiateTabs(QWidget):
 
 
         # **Dropdown for thresholding options**
+        # "Anatomical Atlas" used to live here as a scaffolding shortcut —
+        # it's been moved to its own ROI Analysis tab since it isn't a
+        # thresholding method (it assigns TDPs to pre-defined regions
+        # rather than forming clusters from a threshold).
         self.thresholding_dropdown = QComboBox()
         self.thresholding_dropdown.addItems([
-            "TDP-based", "Z-score based", "Anatomical Atlas", "User-specified cluster map"
+            "TDP-based", "Z-score based", "User-specified cluster map"
         ])
         # self.thresholding_dropdown.currentIndexChanged.connect(self.update_threshold_option)
         self.thresholding_dropdown.currentIndexChanged.connect(self.thresholding_dropdown_clicked.emit)
@@ -94,12 +95,10 @@ class InitiateTabs(QWidget):
             "TDP-based": ("Applying a TDP threshold is equivalent to using different test statistic thresholds for cluster generation. "
                         "Each created cluster has the TDP not below the given threshold. "
                         "Note that you can adjust thresholds afterward. Navigate to the cluster tab for cluster analysis."),
-            
+
             "Z-score based": ("Applying a test statistic threshold leads to conventional supra-threshold clusters. "
                             "Use the z-score option if you want to replicate results from a standard analysis. "
                             "Note that you can adjust thresholds afterward. Navigate to the cluster tab for cluster analysis."),
-
-            "Anatomical Atlas": ("This method assigns a TDP value to each anatomical region instead of using thresholding to define clusters. "),
 
             "User-specified cluster map": ("Instead of defining clusters through thresholding, this method assigns a TDP value to predefined"
                                            "regions in your custom cluster map." )
@@ -113,45 +112,10 @@ class InitiateTabs(QWidget):
         # Initiate the whole brain tdp slider.
         self.threshold_container1 = self.brain_nav.WBTing.whole_brain_tdp_slider() # -> self.threshold_container1
 
-        # **Atlas section — visible only when "Anatomical Atlas" is selected in
-        # the dropdown above. Holds the upload button and the run-analysis
-        # button. Visibility is toggled by WBTing.update_threshold_option.**
-        self.atlas_section = QWidget()
-        atlas_section_layout = QHBoxLayout()
-        atlas_section_layout.setContentsMargins(0, 0, 0, 0)
-
-        self.atlas_upload_button = QPushButton("Upload Atlas")
-        self.atlas_upload_button.setCursor(Qt.PointingHandCursor)
-        self.atlas_upload_button.setStyleSheet(Styles.atlas_button_styling)
-        self.atlas_upload_button.clicked.connect(self._on_atlas_upload_clicked)
-
-        # Optional codebook upload — useful when the sidecar convention
-        # (<atlas>.txt) doesn't apply. Gated on an atlas being loaded so
-        # the loader has a label set to match against.
-        self.atlas_codebook_button = QPushButton("Upload Codebook")
-        self.atlas_codebook_button.setCursor(Qt.PointingHandCursor)
-        self.atlas_codebook_button.setStyleSheet(Styles.atlas_button_styling)
-        self.atlas_codebook_button.setEnabled(False)
-        self.atlas_codebook_button.setToolTip(
-            "Attach or replace the ROI-name codebook for the loaded atlas."
-        )
-        self.atlas_codebook_button.clicked.connect(
-            self._on_atlas_codebook_upload_clicked
-        )
-
-        self.atlas_run_button = QPushButton("Run ROI Analysis")
-        self.atlas_run_button.setCursor(Qt.PointingHandCursor)
-        self.atlas_run_button.setStyleSheet(Styles.atlas_button_styling)
-        # Disabled until an atlas is loaded; the loader flips it on.
-        self.atlas_run_button.setEnabled(False)
-        self.atlas_run_button.clicked.connect(self._on_atlas_run_clicked)
-
-        atlas_section_layout.addWidget(self.atlas_upload_button)
-        atlas_section_layout.addWidget(self.atlas_codebook_button)
-        atlas_section_layout.addWidget(self.atlas_run_button)
-        atlas_section_layout.addStretch()
-        self.atlas_section.setLayout(atlas_section_layout)
-        self.atlas_section.setVisible(False)
+        # The atlas operating panel (Upload Atlas / Upload Codebook / Run)
+        # used to sit here, gated on the "Anatomical Atlas" dropdown option.
+        # It now lives on the ROI Analysis tab (TblROI.init_table) since
+        # ROI-based TDP isn't a thresholding method.
 
         # # **Atlas selection dropdown or file selection**
         # self.atlas_dropdown = QComboBox()
@@ -179,7 +143,6 @@ class InitiateTabs(QWidget):
         whole_brain_layout.addLayout(threshold_layout)
         whole_brain_layout.addWidget(self.advisory_text)
         whole_brain_layout.addWidget(self.threshold_container1)
-        whole_brain_layout.addWidget(self.atlas_section)
         whole_brain_layout.addSpacing(10)  # Adds a little space before the next elements
 
         self.init_metrics_container()  # Initialize the metrics container layout
@@ -252,10 +215,16 @@ class InitiateTabs(QWidget):
         # -----------------------
         self.tab_widget.addTab(whole_brain_tab, "Whole Brain TDP")
         self.tab_widget.addTab(cluster_tab, "Cluster Analysis")
-        self.roi_analysis_tab_index = self.tab_widget.addTab(
-            self.roi_analysis_tab, "ROI Analysis"
-        )
+        self.tab_widget.addTab(self.roi_analysis_tab, "ROI Analysis")
         self.tab_widget.addTab(self.save_export_tab, "Save/Load and Export")
+
+        # Grey out the cluster work station while the ROI Analysis tab is
+        # active: cluster-specific TDP editing is meaningless in the ROI
+        # workflow, and leaving the slider live would otherwise silently
+        # mutate cluster state (and drop the cluster from the 3D viewer)
+        # while the user is looking at ROIs.
+        self.roi_analysis_tab_index = self.tab_widget.indexOf(self.roi_analysis_tab)
+        self.tab_widget.currentChanged.connect(self._on_tab_changed)
 
         # Set the height of the entire container (including tabs)
         half_height = self.brain_nav.height() // 2
@@ -270,38 +239,20 @@ class InitiateTabs(QWidget):
         return self.table_container
 
 
-    def _on_atlas_upload_clicked(self):
-        """
-        Hand off to UploadFiles.upload_atlas_dialog, which runs the file
-        picker, the loader, and flips the orthoviews into atlas-overlay
-        verification mode on success.
-        """
-        self.brain_nav.upload_files.upload_atlas_dialog()
+    # Atlas click handlers used to live here; they now live on TblROI
+    # (which owns the buttons).
 
-    def _on_atlas_codebook_upload_clicked(self):
+    def _on_tab_changed(self, index):
         """
-        Hand off to UploadFiles.upload_codebook_dialog. The dialog replaces
-        the codebook in-place and re-renders TblROI if it's already
-        populated, so this needs no follow-up work here.
+        Enable the cluster work station on every tab except ROI Analysis,
+        where cluster-level TDP editing doesn't apply. set_active greys the
+        whole panel (table, slider, buttons) and shows an inactive banner so
+        the slider can't silently mutate cluster state while the user is
+        working with ROIs.
         """
-        self.brain_nav.upload_files.upload_codebook_dialog()
-
-    def _on_atlas_run_clicked(self):
-        """
-        Compute per-ROI TDPs for the active user atlas, populate the ROI
-        Analysis table, and switch focus to that tab so the user immediately
-        sees the results.
-        """
-        df = self.brain_nav.metrics.compute_roi_tdps(
-            self.brain_nav.file_nr,
-            self.brain_nav.file_nr_template,
-        )
-        if df is None or df.empty:
-            return
-
-        self.brain_nav.tblROI.update_table(df)
-        # Bring the ROI Analysis tab forward so the user doesn't have to hunt.
-        self.tab_widget.setCurrentIndex(self.roi_analysis_tab_index)
+        cluster_ws = getattr(self.brain_nav, 'cluster_ws', None)
+        if cluster_ws is not None and hasattr(cluster_ws, 'set_active'):
+            cluster_ws.set_active(index != self.roi_analysis_tab_index)
 
     def init_metrics_container(self):
         # Create the metrics layout

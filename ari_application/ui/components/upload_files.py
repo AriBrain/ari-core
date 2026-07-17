@@ -192,9 +192,17 @@ class UploadFiles:
             return
 
         # Switch the overlay layer to the atlas for verification. Enable the
-        # Run ROI Analysis + Upload Codebook buttons now that an atlas is
-        # available for them to act on.
+        # Run + Upload Codebook buttons (they live on TblROI, which owns
+        # the whole atlas operating panel) and update the ROI-count readout.
         self.brain_nav.ui_params['overlay_mode'] = 'atlas'
-        self.brain_nav.initiate_tabs.atlas_run_button.setEnabled(True)
-        self.brain_nav.initiate_tabs.atlas_codebook_button.setEnabled(True)
+        self.brain_nav.tblROI.atlas_run_button.setEnabled(True)
+        self.brain_nav.tblROI.atlas_codebook_button.setEnabled(True)
+
+        # ROI count = number of distinct labels in the codebook (auto-filled
+        # to include every non-zero label in the atlas, whether or not the
+        # sidecar named it).
+        sample_entry = next(iter(self.brain_nav.userAtlasInfo.values()), None)
+        if sample_entry is not None:
+            self.brain_nav.tblROI.set_roi_count(len(sample_entry['codebook']))
+
         self.brain_nav.orth_view_update.update_slices()

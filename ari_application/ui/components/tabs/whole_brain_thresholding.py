@@ -241,13 +241,6 @@ class WBTing(QWidget):
         # Update the advisory text based on the selected option
         self.brain_nav.initiate_tabs.advisory_text.setText(self.brain_nav.initiate_tabs.advisory_messages.get(selected_option, ""))
 
-        # Show the atlas section (Upload Atlas + Run ROI Analysis) only when
-        # the user selects "Anatomical Atlas". Other thresholding methods don't
-        # need it.
-        self.brain_nav.initiate_tabs.atlas_section.setVisible(
-            selected_option == "Anatomical Atlas"
-        )
-
         # Block signals to prevent triggering the valueChanged signal
         self.threshold_slider1.blockSignals(True)
         self.tdp_textbox1.blockSignals(True)
