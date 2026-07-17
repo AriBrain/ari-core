@@ -963,12 +963,18 @@ class Metrics:
 
     def follow_cluster_xyz(self, selected_row):
         """
-        Process the selected voxel coordinates, map them to UI space, 
+        Process the selected voxel coordinates, map them to UI space,
         update slice indices, and trigger updates to the orthogonal view and metrics.
 
         Parameters:
             selected_row (int): The row index of the currently selected voxel in the table.
         """
+        # If the last selection was an ROI, the overlay renderer is still in
+        # 'roi' mode. Any call to update_cluster_3d_view or update_slices in
+        # this method would then source from userAtlasInfo instead of the
+        # cluster overlay. Flip back to cluster mode before any render call.
+        self._reset_to_cluster_mode()
+
         file_nr = self.brain_nav.file_nr
         file_nr_template = self.brain_nav.file_nr_template
 
@@ -2198,14 +2204,32 @@ class Metrics:
         )
         return tbl
 
-    def follow_roi_xyz(self, roi_label):
+    def _reset_to_cluster_mode(self):
         """
-        User clicked a row in TblROI: switch the orthoviews into 'roi'
-        overlay mode so the selected ROI keeps full alpha and the others
-        dim, then move the crosshair to the ROI's centroid so its slices
-        become visible. The atlas volume is already in template UI space,
-        so the centroid — mean of np.where(atlas == label) — plugs directly
-        into sagittal_slice / coronal_slice / axial_slice.
+        Flip overlay_mode back to 'cluster' and clear any lingering ROI
+        selection. Called at the top of every cluster-selection entry point
+        so a preceding ROI click doesn't leave the orthoviews / 3D viewer
+        pulling from userAtlasInfo when the user asks for a cluster.
+        Mirror of the mode + label writes at the bottom of follow_roi_xyz.
+        """
+        self.brain_nav.ui_params['overlay_mode'] = 'cluster'
+        self.brain_nav.ui_params['selected_roi_label'] = None
+
+    def follow_roi_xyz(self, roi_label, move_crosshair=True):
+        """
+        Select an ROI and switch the orthoviews into 'roi' overlay mode so
+        the chosen ROI keeps full alpha and the others dim, then refresh the
+        3D viewer.
+
+        move_crosshair=True (table-row click): jump the crosshair to the
+        ROI's centroid so its slices become visible.
+        move_crosshair=False (right-click 'Select ROI (xyz)'): leave the
+        crosshair where the user put it — they've already navigated to the
+        spot they care about.
+
+        The atlas volume is in template UI space, so the centroid — mean of
+        np.where(atlas == label) — plugs directly into sagittal_slice /
+        coronal_slice / axial_slice.
         """
         file_nr = self.brain_nav.file_nr
         file_nr_template = self.brain_nav.file_nr_template
@@ -2223,17 +2247,18 @@ class Metrics:
             )
             return
 
-        # Centroid, rounded to int voxel coordinates. Axis order matches the
-        # cluster overlay path: sagittal = x = axis 0, coronal = y = axis 1,
-        # axial = z = axis 2, matching how add_atlas_overlay indexes into
-        # the same array.
-        cx = int(round(roi_indices[0].mean()))
-        cy = int(round(roi_indices[1].mean()))
-        cz = int(round(roi_indices[2].mean()))
+        if move_crosshair:
+            # Centroid, rounded to int voxel coordinates. Axis order matches
+            # the cluster overlay path: sagittal = x = axis 0, coronal = y =
+            # axis 1, axial = z = axis 2, matching how add_atlas_overlay
+            # indexes into the same array.
+            cx = int(round(roi_indices[0].mean()))
+            cy = int(round(roi_indices[1].mean()))
+            cz = int(round(roi_indices[2].mean()))
 
-        self.brain_nav.sagittal_slice = cx
-        self.brain_nav.coronal_slice = cy
-        self.brain_nav.axial_slice = cz
+            self.brain_nav.sagittal_slice = cx
+            self.brain_nav.coronal_slice = cy
+            self.brain_nav.axial_slice = cz
 
         self.brain_nav.ui_params['selected_roi_label'] = int(roi_label)
         self.brain_nav.ui_params['overlay_mode'] = 'roi'
@@ -2245,4 +2270,11 @@ class Metrics:
         # branches on overlay_mode internally and pulls the ROI volume + LUT from
         # userAtlasInfo when we're in 'roi' mode.
         self.brain_nav.threeDviewer.update_cluster_3d_view(int(roi_label))
+
+        # Keep the ROI table in sync (highlight + scroll to the row), mirroring
+        # the cluster-analysis flow. Signal-blocked inside select_roi_row so it
+        # doesn't bounce back here; a no-op if the table isn't populated yet.
+        tblROI = getattr(self.brain_nav, 'tblROI', None)
+        if tblROI is not None:
+            tblROI.select_roi_row(int(roi_label))
     
