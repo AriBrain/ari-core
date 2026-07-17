@@ -195,27 +195,51 @@ class ThreeDViewer(QWidget):
         lengths = (dims[0], dims[1], dims[2])
             
         if clusLabel:
-            # overlay_data = self.statmaps[self.file_nr]['overlay_data'].T
-            overlay_data = self.brain_nav.aligned_statMapInfo[(file_nr,file_nr_template)]['overlay_data'].T
+            # Source the label volume + LUT based on which overlay mode the
+            # user is currently in. 'roi' pulls from userAtlasInfo (populated
+            # by NiftiLoader.load_user_atlas); anything else keeps the
+            # existing cluster-map path.
+            overlay_mode = self.brain_nav.ui_params.get('overlay_mode', 'cluster')
 
-    
+            if overlay_mode == 'roi':
+                atlas_key = self.brain_nav.orth_view_update._active_atlas_key()
+                atlas_entry = self.brain_nav.userAtlasInfo.get(atlas_key)
+                if atlas_entry is None:
+                    # ROI mode requested but no atlas for the active view —
+                    # nothing meaningful to render.
+                    self.cluster_3d_view.update()
+                    return
+                overlay_data = atlas_entry['data'].T
+                # The atlas LUT is already sized to max(label)+1 with row 0
+                # transparent, so np.take(lut, clusLabel) works directly
+                # without the background-row insert the cluster path needs.
+                lut = atlas_entry['lut'][:, :3]
+            else:
+                # overlay_data = self.statmaps[self.file_nr]['overlay_data'].T
+                overlay_data = self.brain_nav.aligned_statMapInfo[(file_nr, file_nr_template)]['overlay_data'].T
+
+                # ----------------
+                # Determine Cluster Color
+                # ----------------
+                lut = self.brain_nav.fileInfo[file_nr]['custom_lut']
+                lut = lut[:, :3]
+
+                # Define the background row
+                background = np.array([0, 0, 0], dtype=lut.dtype)
+
+                # Insert the background row at the first position (index 0)
+                lut = np.insert(lut, 0, background, axis=0)
+
             # transpose the data to match the PyVista format
             overlay_data = np.transpose(overlay_data, (2, 1, 0))
 
-            # ----------------
-            # Determine Cluster Color
-            # ----------------
-            lut = self.brain_nav.fileInfo[file_nr]['custom_lut']
-            lut = lut[:, :3]
-            
-            # Define the background row
-            background = np.array([0, 0, 0], dtype=lut.dtype)
-
-            # Insert the background row at the first position (index 0)
-            lut = np.insert(lut, 0, background, axis=0)
-            
-            # Map cluster ID to its RGBA color
-            clusColor = np.take(lut, clusLabel, axis=0)
+            # Map label to its RGB colour. Bounds-check first — an ROI label
+            # outside the LUT would raise; snap to 0 (transparent) in that
+            # case so a bad label doesn't blow up the render.
+            if 0 <= clusLabel < lut.shape[0]:
+                clusColor = np.take(lut, clusLabel, axis=0)
+            else:
+                clusColor = np.array([0, 0, 0], dtype=lut.dtype)
             
             # ----------------
             # Add Cluster Voxels

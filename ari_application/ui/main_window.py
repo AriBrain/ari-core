@@ -24,6 +24,7 @@ from ari_application.resources.styles import Styles
 
 from ari_application.ui.components.left_side_bar import LeftSideBar, StatImageItem
 from ari_application.ui.components.tabs.tblARI import TblARI
+from ari_application.ui.components.tabs.tblROI import TblROI
 from ari_application.ui.components.ui_helpers import UIHelpers
 from ari_application.ui.components.upload_files import UploadFiles
 from ari_application.ui.components.three_d_viewer import ThreeDViewer
@@ -210,6 +211,7 @@ class BrainNav(QMainWindow):
 
         # === Initialize UI Components === #
         self.tblARI             = TblARI(self)
+        self.tblROI             = TblROI(self)
         self.UIHelp             = UIHelpers(self)
         self.threeDviewer       = ThreeDViewer(self)
         self.WBTing             = WBTing(self)
