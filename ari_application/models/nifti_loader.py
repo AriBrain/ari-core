@@ -350,18 +350,21 @@ class NiftiLoader:
         helper if it exists, and fill in `ROI <n>` defaults for any labels
         missing from the codebook (or for all labels if there's no sidecar).
 
-        labels_set is the set of integer labels actually present in the
-        atlas — used to know which `ROI <n>` defaults to insert.
+        Logs whether a sidecar was found and how many labels it named vs.
+        how many fell through to auto-generated defaults, so the user isn't
+        guessing whether their codebook file was picked up.
         """
         codebook = {}
-        sidecar = os.path.splitext(atlas_path)[0] + '.txt'
-        # .nii.gz strips only the .gz on the first splitext call.
-        if sidecar.endswith('.nii'):
-            sidecar = sidecar[:-len('.nii')] + '.txt'
+        sidecar = self._sidecar_path_for(atlas_path)
 
         if os.path.exists(sidecar):
             try:
                 codebook = NiftiLoader.parse_atlas_codebook(sidecar)
+                matched = sum(1 for lbl in labels_set if int(lbl) in codebook)
+                self.brain_nav.message_box.log_message(
+                    f"Codebook sidecar found: {os.path.basename(sidecar)} "
+                    f"— {matched} of {len(labels_set)} atlas labels named."
+                )
             except Exception as e:
                 self.brain_nav.message_box.log_message(
                     f"<span style='color: orange;'>Codebook sidecar exists "
@@ -369,11 +372,82 @@ class NiftiLoader:
                     f"</span>"
                 )
                 codebook = {}
+        else:
+            self.brain_nav.message_box.log_message(
+                f"<span style='color: #888;'>No codebook sidecar found at "
+                f"{os.path.basename(sidecar)} — using auto-generated "
+                f"'ROI &lt;label&gt;' names. Use Upload Codebook to attach "
+                f"anatomical names.</span>"
+            )
 
         # Fill any missing labels with a default ROI <n> name.
         for lbl in labels_set:
             codebook.setdefault(int(lbl), f"ROI {int(lbl)}")
         return codebook
+
+    def load_user_codebook(self, codebook_path):
+        """
+        Replace the codebook on every userAtlasInfo entry with names parsed
+        from `codebook_path` (AAL2-format `.txt`). Preserves the auto-
+        generated `ROI <label>` fallback for any labels missing from the
+        file so no ROI ever renders as blank.
+
+        Returns True on a successful parse (regardless of how many labels
+        matched), False if the file couldn't be read or the atlas isn't
+        loaded yet. Callers typically re-render TblROI in-place after True.
+        """
+        if not self.brain_nav.userAtlasInfo:
+            self.brain_nav.message_box.log_message(
+                "<span style='color: orange;'>No user atlas loaded — "
+                "upload an atlas before its codebook.</span>"
+            )
+            return False
+
+        try:
+            parsed = NiftiLoader.parse_atlas_codebook(codebook_path)
+        except Exception as e:
+            self.brain_nav.message_box.log_message(
+                f"<span style='color: red;'>Failed to parse codebook "
+                f"{os.path.basename(codebook_path)}: {e}</span>"
+            )
+            return False
+
+        # Every userAtlasInfo entry (one per template + one per data-as-
+        # template) shares the same label set — grab labels from any entry
+        # to fill defaults for unmatched labels.
+        sample_entry = next(iter(self.brain_nav.userAtlasInfo.values()))
+        sample_atlas = sample_entry['data']
+        labels_present = np.unique(sample_atlas[sample_atlas > 0]).astype(int)
+
+        new_codebook = dict(parsed)
+        for lbl in labels_present:
+            new_codebook.setdefault(int(lbl), f"ROI {int(lbl)}")
+
+        # Every entry keyed under the current atlas gets the new dict.
+        # Reference-shared is fine — the codebook is immutable in practice.
+        for entry in self.brain_nav.userAtlasInfo.values():
+            entry['codebook'] = new_codebook
+
+        matched = sum(1 for lbl in labels_present if int(lbl) in parsed)
+        self.brain_nav.message_box.log_message(
+            f"Codebook replaced from {os.path.basename(codebook_path)} — "
+            f"{matched} of {len(labels_present)} labels named."
+        )
+        return True
+
+    @staticmethod
+    def _sidecar_path_for(atlas_path):
+        """
+        Resolve `foo.nii` -> `foo.txt` and `foo.nii.gz` -> `foo.txt`.
+        os.path.splitext only strips the last extension, so .nii.gz needs
+        an explicit second peel.
+        """
+        base = atlas_path
+        if base.endswith('.nii.gz'):
+            base = base[:-len('.nii.gz')]
+        elif base.endswith('.nii'):
+            base = base[:-len('.nii')]
+        return base + '.txt'
 
     def _build_atlas_lut(self, unique_labels):
         """

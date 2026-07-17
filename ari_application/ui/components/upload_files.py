@@ -124,6 +124,48 @@ class UploadFiles:
                 self.brain_nav.file_nr_template -= 1
                 self.error_handler.handle_exception(e)
 
+    def upload_codebook_dialog(self):
+        """
+        Pick a codebook `.txt` in AAL2 format and swap in the parsed names.
+        Only meaningful once a user atlas is loaded; the atlas section's
+        Upload Codebook button is gated on that. If a TblROI is already
+        populated, we re-render it in place with the new names — TDPs and
+        centroids are unaffected by a name change so no recompute needed.
+        """
+        options = QFileDialog.Options()
+        file_path, _ = QFileDialog.getOpenFileName(
+            self.brain_nav, "Upload Codebook File", "",
+            "Text Files (*.txt);;All Files (*)",
+            options=options,
+        )
+        if not file_path:
+            return
+
+        self.logger.info(f"Codebook file selected: {file_path}")
+        try:
+            ok = self.brain_nav.nifti_loader.load_user_codebook(file_path)
+        except Exception as e:
+            self.error_handler.handle_exception(e)
+            return
+
+        if not ok:
+            return
+
+        # Refresh any existing ROI table with the new names. tblROI_df stores
+        # names in the 'ROI' column, so we rewrite that column from the new
+        # codebook (keyed by Label) rather than recomputing anything.
+        file_nr = self.brain_nav.file_nr
+        tbl = self.brain_nav.fileInfo.get(file_nr, {}).get('tblROI_df')
+        if tbl is not None and not tbl.empty:
+            atlas_key = self.brain_nav.metrics._resolve_atlas_key(
+                file_nr, self.brain_nav.file_nr_template,
+            )
+            new_codebook = self.brain_nav.userAtlasInfo[atlas_key]['codebook']
+            tbl['ROI'] = tbl['Label'].map(
+                lambda lbl: new_codebook.get(int(lbl), f"ROI {int(lbl)}")
+            )
+            self.brain_nav.tblROI.update_table(tbl)
+
     def upload_atlas_dialog(self):
         """
         Pick a user atlas NIfTI, hand off to NiftiLoader.load_user_atlas, and
@@ -150,7 +192,9 @@ class UploadFiles:
             return
 
         # Switch the overlay layer to the atlas for verification. Enable the
-        # Run ROI Analysis button now that an atlas is available.
+        # Run ROI Analysis + Upload Codebook buttons now that an atlas is
+        # available for them to act on.
         self.brain_nav.ui_params['overlay_mode'] = 'atlas'
         self.brain_nav.initiate_tabs.atlas_run_button.setEnabled(True)
+        self.brain_nav.initiate_tabs.atlas_codebook_button.setEnabled(True)
         self.brain_nav.orth_view_update.update_slices()

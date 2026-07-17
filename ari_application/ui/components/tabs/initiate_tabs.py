@@ -125,15 +125,29 @@ class InitiateTabs(QWidget):
         self.atlas_upload_button.setStyleSheet(Styles.atlas_button_styling)
         self.atlas_upload_button.clicked.connect(self._on_atlas_upload_clicked)
 
+        # Optional codebook upload — useful when the sidecar convention
+        # (<atlas>.txt) doesn't apply. Gated on an atlas being loaded so
+        # the loader has a label set to match against.
+        self.atlas_codebook_button = QPushButton("Upload Codebook")
+        self.atlas_codebook_button.setCursor(Qt.PointingHandCursor)
+        self.atlas_codebook_button.setStyleSheet(Styles.atlas_button_styling)
+        self.atlas_codebook_button.setEnabled(False)
+        self.atlas_codebook_button.setToolTip(
+            "Attach or replace the ROI-name codebook for the loaded atlas."
+        )
+        self.atlas_codebook_button.clicked.connect(
+            self._on_atlas_codebook_upload_clicked
+        )
+
         self.atlas_run_button = QPushButton("Run ROI Analysis")
         self.atlas_run_button.setCursor(Qt.PointingHandCursor)
         self.atlas_run_button.setStyleSheet(Styles.atlas_button_styling)
-        # Disabled until an atlas is loaded; the loader (later phase) will
-        # enable it.
+        # Disabled until an atlas is loaded; the loader flips it on.
         self.atlas_run_button.setEnabled(False)
         self.atlas_run_button.clicked.connect(self._on_atlas_run_clicked)
 
         atlas_section_layout.addWidget(self.atlas_upload_button)
+        atlas_section_layout.addWidget(self.atlas_codebook_button)
         atlas_section_layout.addWidget(self.atlas_run_button)
         atlas_section_layout.addStretch()
         self.atlas_section.setLayout(atlas_section_layout)
@@ -222,7 +236,13 @@ class InitiateTabs(QWidget):
         cluster_tab.setLayout(cluster_layout)
 
         # -----------------------
-        # Tab 3: Save & Export Project
+        # Tab 3: ROI Analysis (user-uploaded atlas) — self-contained widget
+        # built by TblROI; empty placeholder until compute_roi_tdps runs.
+        # -----------------------
+        self.roi_analysis_tab = self.brain_nav.tblROI.init_table()
+
+        # -----------------------
+        # Tab 4: Save & Export Project
         # -----------------------
 
         self.save_export_tab = self.brain_nav.save_export.init_save_and_export_tab()
@@ -232,6 +252,9 @@ class InitiateTabs(QWidget):
         # -----------------------
         self.tab_widget.addTab(whole_brain_tab, "Whole Brain TDP")
         self.tab_widget.addTab(cluster_tab, "Cluster Analysis")
+        self.roi_analysis_tab_index = self.tab_widget.addTab(
+            self.roi_analysis_tab, "ROI Analysis"
+        )
         self.tab_widget.addTab(self.save_export_tab, "Save/Load and Export")
 
         # Set the height of the entire container (including tabs)
@@ -255,11 +278,30 @@ class InitiateTabs(QWidget):
         """
         self.brain_nav.upload_files.upload_atlas_dialog()
 
+    def _on_atlas_codebook_upload_clicked(self):
+        """
+        Hand off to UploadFiles.upload_codebook_dialog. The dialog replaces
+        the codebook in-place and re-renders TblROI if it's already
+        populated, so this needs no follow-up work here.
+        """
+        self.brain_nav.upload_files.upload_codebook_dialog()
+
     def _on_atlas_run_clicked(self):
-        """Placeholder for the ROI-TDP run (computation lands in step 4)."""
-        self.brain_nav.message_box.log_message(
-            "Run ROI Analysis clicked — computation not implemented yet."
+        """
+        Compute per-ROI TDPs for the active user atlas, populate the ROI
+        Analysis table, and switch focus to that tab so the user immediately
+        sees the results.
+        """
+        df = self.brain_nav.metrics.compute_roi_tdps(
+            self.brain_nav.file_nr,
+            self.brain_nav.file_nr_template,
         )
+        if df is None or df.empty:
+            return
+
+        self.brain_nav.tblROI.update_table(df)
+        # Bring the ROI Analysis tab forward so the user doesn't have to hunt.
+        self.tab_widget.setCurrentIndex(self.roi_analysis_tab_index)
 
     def init_metrics_container(self):
         # Create the metrics layout
