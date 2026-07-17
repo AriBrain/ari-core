@@ -140,10 +140,10 @@ class UIHelpers:
     def refresh_ui(self):
         """Refresh the UI after loading a project."""
         # Update table with reloaded data
-        try: 
+        try:
             self.brain_nav.tblARI.update_table(self.brain_nav.fileInfo[self.brain_nav.file_nr]['tblARI_df'])
-        except:
-            print("No table data to update")
+        except Exception as e:
+            self.brain_nav.message_box.debug(f"No table data to update: {e}")
 
         # Update 3D viewer
         self.brain_nav.threeDviewer.update_cluster_3d_view()
