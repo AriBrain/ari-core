@@ -673,74 +673,88 @@ class OrthViewUpdate:
         # Define opposite directions
         opposites = {'L': 'R', 'R': 'L', 'A': 'P', 'P': 'A', 'I': 'S', 'S': 'I'}
 
-        # ---------------------------------------------
-        # Orientation Label Placement Explanation
-        # ---------------------------------------------
-        # We dynamically place anatomical orientation labels based on the image's sform affine,
-        # using `nibabel.aff2axcodes(sform)`. This gives the *positive direction* of each axis.
+        # ---------------------------------------------------------------
+        # Derive the DISPLAY volume's axis directions by composing the
+        # exact transform chain the rendered data went through, instead of
+        # assuming the canonical axes survive it (they don't — the y-flip
+        # in rotate_volume previously mirrored A/P on the sagittal view's
+        # horizontal axis while the axial view's two inversions happened
+        # to cancel).
         #
-        # For example: axcodes = ('R', 'A', 'S') means:
-        #   - axis 0 increases toward Right (R), so the opposite (Left, L) is on the left side.
-        #   - axis 1 increases toward Anterior (A), so Posterior (P) is on the bottom.
-        #   - axis 2 increases toward Superior (S), used in sagittal/coronal views.
+        # Chain (see transpose_image / rotate_volume in image_processing):
+        #   canonical (axcodes, e.g. R, A, S)
+        #   1. .T                    -> axes reversed:            (2, 1, 0)
+        #   2. rot90(k=1, axes=(2,0)) = flip(axis 0) + swap 0<->2
+        #   3. flip(axis 1)
         #
-        # For each 2D view, we assign label text to image edges:
-        #   - The label at the minimum side of an axis shows the *opposite* direction.
-        #   - The label at the maximum side shows the actual axcode direction.
-        #
-        # Example for axial view (X = L-R, Y = A-P):
-        #   - Left edge (min X): opposite of axcodes[0] → 'L'
-        #   - Right edge (max X): axcodes[0] → 'R'
-        #   - Top edge (min Y): axcodes[1] → 'A'
-        #   - Bottom edge (max Y): opposite of axcodes[1] → 'P'
+        # Tracking (direction, sign) triples through those steps yields the
+        # per-axis positive direction of the array that setImage receives.
+        # ---------------------------------------------------------------
+        def _display_axcodes(canonical):
+            # (code, flipped?) per axis, starting canonical: axis i -> code i
+            axes = [(canonical[0], False), (canonical[1], False), (canonical[2], False)]
+            axes = axes[::-1]                       # 1. transpose (.T)
+            axes[0] = (axes[0][0], not axes[0][1])  # 2a. rot90: flip axis 0
+            axes[0], axes[2] = axes[2], axes[0]     # 2b. rot90: swap axes 0<->2
+            axes[1] = (axes[1][0], not axes[1][1])  # 3. y-flip (rotate_volume)
+            # Resolve flips into the opposite letter.
+            return tuple(opposites[c] if flipped else c for c, flipped in axes)
 
-        # Axial: X = axis 0 (L-R), Y = axis 1 (A-P)
+        # Positive direction of each DISPLAY axis, e.g. ('R', 'P', 'I') for
+        # RAS input. Rendering: pyqtgraph col-major (array axis 0 -> screen
+        # x, axis 1 -> screen y) with ImageView's default invertY, so screen
+        # y increases DOWNWARD. Hence for any displayed 2D slice:
+        #   right edge  = positive direction of its screen-x axis
+        #   bottom edge = positive direction of its screen-y axis
+        disp = _display_axcodes(axcodes)
+
+        # Axial slice [:, :, z]: screen-x = display axis 0, screen-y = axis 1
         shape = self.brain_nav.axial_view.image.shape
         x_len, y_len = shape[0], shape[1]
         vbox = self.brain_nav.axial_view.getView()
-        label = create_label(opposites[axcodes[0]], (-offset, y_len / 2))         # Left
+        label = create_label(opposites[disp[0]], (-offset, y_len / 2))         # left edge
         vbox.addItem(label)
         self.orientation_labels['axial'].append(label)
-        label = create_label(axcodes[0], (x_len + offset, y_len / 2))             # Right
+        label = create_label(disp[0], (x_len + offset, y_len / 2))             # right edge
         vbox.addItem(label)
         self.orientation_labels['axial'].append(label)
-        label = create_label(axcodes[1], (x_len / 2, -offset))                    # Anterior (shown at top, but really "forward")
+        label = create_label(opposites[disp[1]], (x_len / 2, -offset))         # top edge
         vbox.addItem(label)
         self.orientation_labels['axial'].append(label)
-        label = create_label(opposites[axcodes[1]], (x_len / 2, y_len + offset))  # Posterior
+        label = create_label(disp[1], (x_len / 2, y_len + offset))             # bottom edge
         vbox.addItem(label)
         self.orientation_labels['axial'].append(label)
 
-        # Sagittal: X = axis 1 (A-P), Y = axis 2 (I-S)
+        # Sagittal slice [x, :, :]: screen-x = display axis 1, screen-y = axis 2
         shape = self.brain_nav.sagittal_view.image.shape
         x_len, y_len = shape[0], shape[1]
         vbox = self.brain_nav.sagittal_view.getView()
-        label = create_label(opposites[axcodes[1]], (-offset, y_len / 2))         # Posterior
+        label = create_label(opposites[disp[1]], (-offset, y_len / 2))         # left edge
         vbox.addItem(label)
         self.orientation_labels['sagittal'].append(label)
-        label = create_label(axcodes[1], (x_len + offset, y_len / 2))             # Anterior
+        label = create_label(disp[1], (x_len + offset, y_len / 2))             # right edge
         vbox.addItem(label)
         self.orientation_labels['sagittal'].append(label)
-        label = create_label(axcodes[2], (x_len / 2, -offset))                    # Superior (shown at top)
+        label = create_label(opposites[disp[2]], (x_len / 2, -offset))         # top edge
         vbox.addItem(label)
         self.orientation_labels['sagittal'].append(label)
-        label = create_label(opposites[axcodes[2]], (x_len / 2, y_len + offset))  # Inferior
+        label = create_label(disp[2], (x_len / 2, y_len + offset))             # bottom edge
         vbox.addItem(label)
         self.orientation_labels['sagittal'].append(label)
 
-        # Coronal: X = axis 0 (L-R), Y = axis 2 (I-S)
+        # Coronal slice [:, y, :]: screen-x = display axis 0, screen-y = axis 2
         shape = self.brain_nav.coronal_view.image.shape
         x_len, y_len = shape[0], shape[1]
         vbox = self.brain_nav.coronal_view.getView()
-        label = create_label(opposites[axcodes[0]], (-offset, y_len / 2))         # Left
+        label = create_label(opposites[disp[0]], (-offset, y_len / 2))         # left edge
         vbox.addItem(label)
         self.orientation_labels['coronal'].append(label)
-        label = create_label(axcodes[0], (x_len + offset, y_len / 2))             # Right
+        label = create_label(disp[0], (x_len + offset, y_len / 2))             # right edge
         vbox.addItem(label)
         self.orientation_labels['coronal'].append(label)
-        label = create_label(axcodes[2], (x_len / 2, -offset))                    # Superior
+        label = create_label(opposites[disp[2]], (x_len / 2, -offset))         # top edge
         vbox.addItem(label)
         self.orientation_labels['coronal'].append(label)
-        label = create_label(opposites[axcodes[2]], (x_len / 2, y_len + offset))  # Inferior
+        label = create_label(disp[2], (x_len / 2, y_len + offset))             # bottom edge
         vbox.addItem(label)
         self.orientation_labels['coronal'].append(label)
