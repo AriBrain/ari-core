@@ -130,7 +130,7 @@ class ThreeDViewer(QWidget):
         
         self.toggle_3dviewer_button.raise_()
         self.pause_3dviewer_button.raise_()
-        
+
         # Initialize 3D brain pause flag to False (3D rendering is active)
         if 'ui_params' in self.brain_nav.__dict__ and '3d_brain_pause' not in self.brain_nav.ui_params:
             self.brain_nav.ui_params['3d_brain_pause'] = False
@@ -210,10 +210,17 @@ class ThreeDViewer(QWidget):
                     self.cluster_3d_view.update()
                     return
                 overlay_data = atlas_entry['data'].T
-                # The atlas LUT is already sized to max(label)+1 with row 0
-                # transparent, so np.take(lut, clusLabel) works directly
-                # without the background-row insert the cluster path needs.
-                lut = atlas_entry['lut'][:, :3]
+                # Pick the LUT the current colour mode calls for; fall back
+                # to categorical if heatmap is set but tdp_lut isn't built
+                # yet (no analysis run for this atlas). Atlas LUTs are
+                # already sized to max(label)+1 with row 0 transparent, so
+                # np.take(lut, clusLabel) works directly without the
+                # background-row insert the cluster path needs.
+                colour_mode = self.brain_nav.ui_params.get('atlas_colour_mode', 'categorical')
+                if colour_mode == 'heatmap' and atlas_entry.get('tdp_lut') is not None:
+                    lut = atlas_entry['tdp_lut'][:, :3]
+                else:
+                    lut = atlas_entry['lut'][:, :3]
             else:
                 # overlay_data = self.statmaps[self.file_nr]['overlay_data'].T
                 overlay_data = self.brain_nav.aligned_statMapInfo[(file_nr, file_nr_template)]['overlay_data'].T

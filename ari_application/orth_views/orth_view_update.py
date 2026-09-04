@@ -7,11 +7,11 @@ class OrthViewUpdate:
     def __init__(self, BrainNaV):
         """
 
-        The OrthViewUpdate class handles the updating of orthogonal views (axial, sagittal, coronal) 
-        for the BrainNav application. It includes methods to get and set the display ranges of these views, 
+        The OrthViewUpdate class handles the updating of orthogonal views (axial, sagittal, coronal)
+        for the BrainNav application. It includes methods to get and set the display ranges of these views,
         update the displayed image slices, and manage the crosshair positions within each view. This class
-        ensures that the views are synchronized and correctly display the current state of the brain 
-        image data. 
+        ensures that the views are synchronized and correctly display the current state of the brain
+        image data.
         """
 
         # Initialize the OrthViewUpdate with a reference to the BrainNav instance.
@@ -21,6 +21,11 @@ class OrthViewUpdate:
         self.axial_overlay_item = None
         self.sagittal_overlay_item = None
         self.coronal_overlay_item = None
+        # Extra ImageItems for the selected-ROI border (heatmap/categorical
+        # selection highlight replaces the old dim-others approach).
+        self.axial_contour_item = None
+        self.sagittal_contour_item = None
+        self.coronal_contour_item = None
 
     def get_ranges(self):
         """
@@ -148,9 +153,15 @@ class OrthViewUpdate:
                 if overlay_mode == 'roi' else None
             )
         elif 'overlay_data' in statmap_entry:
+            # Clear any leftover atlas contour items before drawing the
+            # cluster overlay — add_overlay_with_transparency doesn't know
+            # about them.
+            self._clear_atlas_contours()
             self.add_overlay_with_transparency(selected_cluster_id)
             # self.update_crosshairs()
         else:
+            # Full cleanup — atlas overlay + contour + cluster overlay items.
+            self._clear_atlas_contours()
             # Remove existing overlay items if they exist
             if self.axial_overlay_item:
                 self.brain_nav.axial_view.removeItem(self.axial_overlay_item)
@@ -412,47 +423,38 @@ class OrthViewUpdate:
     def add_atlas_overlay(self, highlight_label=None):
         """
         Render the user-uploaded atlas as a coloured overlay over the current
-        template, one stable colour per ROI label. When highlight_label is
-        not None, that label keeps full alpha and the rest are dimmed so a
-        selected ROI stands out (used by the 'roi' overlay mode).
+        template. LUT choice depends on ui_params['atlas_colour_mode']:
+        'categorical' uses the fixed HSV palette, 'heatmap' uses the viridis
+        LUT built from per-ROI TDPs by Metrics._build_atlas_tdp_lut.
 
-        Mirrors the contract of add_overlay_with_transparency: builds three
-        per-slice pg.ImageItems via np.take(lut, slice, axis=0) so the LUT
-        does the colouring and pyqtgraph just blits RGBA. The atlas volume
-        was already resampled onto the template grid by load_user_atlas, so
-        no per-call resampling needed.
+        When highlight_label is set (the 'roi' overlay mode), a bright cyan
+        1-voxel contour is drawn on top of the selected ROI in each slice —
+        replacing the old dim-others approach so heatmap comparisons across
+        ROIs remain readable while the selection stays identifiable.
         """
-        # Drop any previous overlay items so we don't stack.
-        if self.axial_overlay_item:
-            self.brain_nav.axial_view.removeItem(self.axial_overlay_item)
-        if self.sagittal_overlay_item:
-            self.brain_nav.sagittal_view.removeItem(self.sagittal_overlay_item)
-        if self.coronal_overlay_item:
-            self.brain_nav.coronal_view.removeItem(self.coronal_overlay_item)
+        # Drop any previous overlay + contour items so we don't stack.
+        self._remove_atlas_overlay_items()
 
         atlas_entry = self.brain_nav.userAtlasInfo[self._active_atlas_key()]
         atlas_vol = atlas_entry['data']
-        lut = atlas_entry['lut'].copy()  # copy so highlight tweaks don't persist
+
+        # Pick the LUT the current colour mode calls for. Fall back to the
+        # categorical LUT if heatmap was requested but tdp_lut hasn't been
+        # built yet (analysis not run).
+        mode = self.brain_nav.ui_params.get('atlas_colour_mode', 'categorical')
+        if mode == 'heatmap' and atlas_entry.get('tdp_lut') is not None:
+            lut = atlas_entry['tdp_lut'].copy()
+        else:
+            lut = atlas_entry['lut'].copy()
 
         # Apply the live opacity from the orthview alpha slider. The LUT
         # bakes in the alpha at load time, so without this the atlas overlay
         # ignores later slider moves. Only ROI rows (alpha > 0) are touched,
-        # keeping the background row transparent.
+        # keeping the background row transparent. No dim-highlight rewrite:
+        # selection is signalled by the contour overlay instead.
         roi_rows = lut[:, 3] > 0
         slider_alpha = int(self.brain_nav.alpha * 255)
-
-        # Highlight mode: dim every non-selected label so the selected one
-        # pops. Matches the cluster-overlay selection styling.
-        if highlight_label is not None:
-            # Selected ROI at full opacity, the rest dimmed relative to the
-            # current slider level so the slider still has an effect.
-            dim_alpha = int(0.4 * self.brain_nav.alpha * 255)
-            lut[roi_rows, 3] = dim_alpha
-            if 0 <= highlight_label < lut.shape[0]:
-                lut[highlight_label, 3] = 255
-        else:
-            # Verification view: every ROI at the slider's opacity.
-            lut[roi_rows, 3] = slider_alpha
+        lut[roi_rows, 3] = slider_alpha
 
         template_data = self.brain_nav.templates[self.brain_nav.file_nr_template]['data']
 
@@ -479,6 +481,76 @@ class OrthViewUpdate:
         self.brain_nav.axial_view.addItem(self.axial_overlay_item)
         self.brain_nav.sagittal_view.addItem(self.sagittal_overlay_item)
         self.brain_nav.coronal_view.addItem(self.coronal_overlay_item)
+
+        # Contour highlight for the selected ROI, if any.
+        if highlight_label is not None and 0 < highlight_label <= max_idx:
+            self._add_atlas_contour(
+                axial_slice, sagittal_slice, coronal_slice, int(highlight_label),
+            )
+
+    def _clear_atlas_contours(self):
+        """Drop the three per-view contour ImageItems (no-op if absent)."""
+        for attr, view_attr in [
+            ('axial_contour_item', 'axial_view'),
+            ('sagittal_contour_item', 'sagittal_view'),
+            ('coronal_contour_item', 'coronal_view'),
+        ]:
+            item = getattr(self, attr)
+            if item is not None:
+                getattr(self.brain_nav, view_attr).removeItem(item)
+                setattr(self, attr, None)
+
+    def _remove_atlas_overlay_items(self):
+        for attr, view_attr in [
+            ('axial_overlay_item', 'axial_view'),
+            ('sagittal_overlay_item', 'sagittal_view'),
+            ('coronal_overlay_item', 'coronal_view'),
+            ('axial_contour_item', 'axial_view'),
+            ('sagittal_contour_item', 'sagittal_view'),
+            ('coronal_contour_item', 'coronal_view'),
+        ]:
+            item = getattr(self, attr)
+            if item is not None:
+                getattr(self.brain_nav, view_attr).removeItem(item)
+                setattr(self, attr, None)
+
+    def _add_atlas_contour(self, axial_slice, sagittal_slice, coronal_slice, label):
+        """
+        Draw a 1-voxel bright-cyan border around the selected ROI on each
+        slice. Border = ROI - eroded(ROI), computed per slice with scipy.
+        Cheap (three small binary_erosion calls per slice update) and
+        legible over both categorical and heatmap-coloured overlays.
+        """
+        from scipy.ndimage import binary_erosion
+
+        # RGBA — bright cyan, fully opaque. Chosen to contrast with viridis
+        # (yellow-through-purple) and with the categorical HSV palette.
+        border_rgba = np.array([0, 255, 255, 255], dtype=np.uint8)
+
+        def contour_image(slice_2d):
+            roi = (slice_2d == label)
+            if not roi.any():
+                return None
+            border = roi & ~binary_erosion(roi)
+            if not border.any():
+                return None
+            img = np.zeros((*slice_2d.shape, 4), dtype=np.uint8)
+            img[border] = border_rgba
+            return img
+
+        axial_img = contour_image(axial_slice)
+        sagittal_img = contour_image(sagittal_slice)
+        coronal_img = contour_image(coronal_slice)
+
+        if axial_img is not None:
+            self.axial_contour_item = pg.ImageItem(axial_img)
+            self.brain_nav.axial_view.addItem(self.axial_contour_item)
+        if sagittal_img is not None:
+            self.sagittal_contour_item = pg.ImageItem(sagittal_img)
+            self.brain_nav.sagittal_view.addItem(self.sagittal_contour_item)
+        if coronal_img is not None:
+            self.coronal_contour_item = pg.ImageItem(coronal_img)
+            self.brain_nav.coronal_view.addItem(self.coronal_contour_item)
 
     def create_custom_lut(self, colormap='hot', alpha=0.5, selected_cluster_id=None, overlay=None):
         """

@@ -11,7 +11,7 @@ mode and focus the crosshair on the selected ROI's centroid.
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
     QTextEdit, QTableWidget, QTableWidgetItem, QHeaderView,
-    QAbstractItemView,
+    QAbstractItemView, QComboBox,
 )
 from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt
@@ -134,6 +134,23 @@ class TblROI(QWidget):
             }
         """)
 
+        # Colour-mode toggle. Categorical is the default; Heatmap uses viridis
+        # coloured by per-ROI TDP (auto-ranged) and requires the analysis to
+        # have run. Disabled until then. Label omitted to keep the panel
+        # within the tab's horizontal budget — the combo items themselves
+        # ("Categorical" / "TDP heatmap") explain what it does, and the
+        # tooltip carries the fuller description.
+        self.colour_mode_selector = QComboBox()
+        self.colour_mode_selector.addItems(["Categorical", "TDP heatmap"])
+        self.colour_mode_selector.setEnabled(False)
+        self.colour_mode_selector.setToolTip(
+            "Categorical: fixed HSV palette per ROI.\n"
+            "TDP heatmap: viridis coloured by TDP (auto-ranged across ROIs)."
+        )
+        self.colour_mode_selector.currentIndexChanged.connect(
+            self._on_colour_mode_changed
+        )
+
         # Green Run button — matches Styles.runARI_button_styling used on the
         # Whole Brain TDP tab. Disabled until an atlas is loaded.
         self.atlas_run_button = QPushButton("Run")
@@ -147,9 +164,24 @@ class TblROI(QWidget):
         row.addSpacing(12)
         row.addWidget(roi_count_label)
         row.addWidget(self.roi_count_display)
+        row.addSpacing(12)
+        row.addWidget(self.colour_mode_selector)
         row.addStretch()
         row.addWidget(self.atlas_run_button)
         return row
+
+    def _on_colour_mode_changed(self, index):
+        """
+        Update ui_params and refresh the orthviews + 3D so the swap is
+        instant. Uses the QComboBox text, not the index, so reordering the
+        combo later won't break the mapping.
+        """
+        mode = 'heatmap' if self.colour_mode_selector.currentText() == 'TDP heatmap' else 'categorical'
+        self.brain_nav.ui_params['atlas_colour_mode'] = mode
+        self.brain_nav.orth_view_update.update_slices()
+        selected = self.brain_nav.ui_params.get('selected_roi_label')
+        if selected is not None:
+            self.brain_nav.threeDviewer.update_cluster_3d_view(int(selected))
 
     def set_roi_count(self, n):
         """
@@ -321,6 +353,9 @@ class TblROI(QWidget):
         if df is None or df.empty:
             return
         self.update_table(df)
+        # tdp_lut is built inside compute_roi_tdps, so the heatmap option
+        # is now meaningful — enable the toggle.
+        self.colour_mode_selector.setEnabled(True)
 
     def _on_row_selected(self):
         """

@@ -2153,6 +2153,14 @@ class Metrics:
         )
         self.brain_nav.fileInfo[file_nr]['tblROI_df'] = tbl
 
+        # Build the TDP-heatmap LUT alongside the categorical one so the
+        # renderer can swap between them without recomputing anything. Auto-
+        # range across the ROIs that actually scored: max-contrast within the
+        # analysis, at the cost of cross-map comparability.
+        tdp_lut, tdp_range = self._build_atlas_tdp_lut(atlas_entry)
+        atlas_entry['tdp_lut'] = tdp_lut
+        atlas_entry['tdp_range'] = tdp_range
+
         # Log a compact preview to the message box so the user can verify
         # the numbers even without opening the ROI Analysis tab. Cap the
         # preview so a 9000-ROI atlas doesn't flood the log.
@@ -2164,6 +2172,49 @@ class Metrics:
             f"{preview_rows}</pre>"
         )
         return tbl
+
+    def _build_atlas_tdp_lut(self, atlas_entry):
+        """
+        Build a heatmap RGBA LUT mirroring the shape of atlas_entry['lut']
+        (same (max_label+1, 4) uint8 contract, row 0 transparent, empty ROIs
+        transparent) but coloured by TDP via viridis. Auto-ranges across the
+        set of ROIs that actually scored so contrast fills the map; the
+        (vmin, vmax) pair is returned for the colourbar legend.
+
+        Degenerate cases:
+          - No scoring ROI: return (None, None). Renderer falls back to the
+            categorical LUT.
+          - All TDPs equal (or a single scoring ROI): every ROI maps to the
+            viridis midpoint (0.5) — a valid uniform colour rather than a
+            /0 crash.
+        """
+        import matplotlib.pyplot as plt
+
+        tdps = {
+            int(L): float(v)
+            for L, v in (atlas_entry.get('tdps_per_roi') or {}).items()
+            if v is not None
+        }
+        if not tdps:
+            return None, None
+
+        vmin = min(tdps.values())
+        vmax = max(tdps.values())
+        span = vmax - vmin
+
+        def norm(v):
+            return 0.5 if span < 1e-9 else (v - vmin) / span
+
+        cmap = plt.get_cmap('viridis')
+        n_rows = atlas_entry['lut'].shape[0]
+        tdp_lut = np.zeros((n_rows, 4), dtype=np.uint8)
+        alpha_byte = int(self.brain_nav.alpha * 255)
+
+        for label, tdp in tdps.items():
+            r, g, b, _ = cmap(norm(tdp))
+            tdp_lut[label] = [int(r * 255), int(g * 255), int(b * 255), alpha_byte]
+
+        return tdp_lut, (vmin, vmax)
 
     def _reset_to_cluster_mode(self):
         """

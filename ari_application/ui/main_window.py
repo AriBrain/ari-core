@@ -146,6 +146,10 @@ class BrainNav(QMainWindow):
                 # used post-analysis to highlight a selected ROI.
                 'overlay_mode': 'cluster',
                 'selected_roi_label': None,
+                # Categorical (fixed HSV palette) vs heatmap (viridis of TDP).
+                # Heatmap only available after compute_roi_tdps has built
+                # userAtlasInfo[key]['tdp_lut'].
+                'atlas_colour_mode': 'categorical',
             }
 
             # Load Nifti Overlay (Ensures Data is Loaded)
@@ -181,6 +185,7 @@ class BrainNav(QMainWindow):
             # KeyError on legacy projects.
             self.ui_params.setdefault('overlay_mode', 'cluster')
             self.ui_params.setdefault('selected_roi_label', None)
+            self.ui_params.setdefault('atlas_colour_mode', 'categorical')
             self.aligned_statMapInfo    = data2load['aligned_statMapInfo']
             self.aligned_templateInfo   = data2load['aligned_templateInfo']
             self.stat_image_items       = [] # This is not saved in the pickle file but needed when handling more than one statmap sessions        
