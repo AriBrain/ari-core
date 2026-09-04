@@ -252,14 +252,16 @@ class ClusterWorkStation(QWidget):
                     try:
                         tdp_value = float(selected_item.text())
                     except ValueError:
-                        print(f"Warning: TDP value '{selected_item.text()}' could not be converted to float.")
+                        self.brain_nav.message_box.warn(
+                            f"TDP value '{selected_item.text()}' could not be converted to float."
+                        )
 
             self.work_station_table.setItem(0, column, item)
 
         if selected_row is not None and tdp_value is not None:
             self.brain_nav.UIHelp.update_tdp_ui(tdp_value)
         elif selected_row is not None:
-            print("Warning: No TDP value found in selected row.")
+            self.brain_nav.message_box.warn("No TDP value found in selected row.")
 
     def clear_work_station(self):
         """
@@ -302,7 +304,9 @@ class ClusterWorkStation(QWidget):
             self.set_tdp(new_tdp)
         except ValueError:
             invalid_text = self.tdp_textbox.text()
-            print(f"[DEBUG] Invalid float entered in TDP textbox: '{invalid_text}'")
+            self.brain_nav.message_box.warn(
+                f"Invalid float entered in TDP textbox: '{invalid_text}'"
+            )
             # Reset to the current slider value if input is invalid
             self.tdp_textbox.setText(f"{self.cluster_slider.value() / 100:.2f}")
 
@@ -343,13 +347,10 @@ class ClusterWorkStation(QWidget):
                 cluster_tdp = selected_row['TDP'].values[0]
 
                 if cluster_tdp == 0:
-                    warning_message = (
-                        "<span style='color: orange; font-weight: bold;'>"
-                        f"Warning: Cluster {selected_cluster_id} has TDP = 0. "
+                    self.brain_nav.message_box.warn(
+                        f"Cluster {selected_cluster_id} has TDP = 0. "
                         "TDP adjustment is not possible."
-                        "</span>"
                     )
-                    self.brain_nav.message_box.log_message(warning_message)
 
                     print("\033[38;5;214m"  # Orange terminal output
                         f"Warning: Cluster {selected_cluster_id} has TDP = 0. "

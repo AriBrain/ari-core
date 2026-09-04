@@ -6,7 +6,10 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QPushButton, QFormLayout, QHB
 from PyQt5.QtGui import QPalette, QBrush, QPixmap, QFont, QImage, QColor
 from PyQt5.QtCore import Qt
 import os
+import pickle
+from ari_application import get_package_dir
 from ari_application.ui.main_window import BrainNav
+from ari_application.ui.components.save_and_export import PROJECT_FILE_FORMAT_VERSION
 import pickle
 
 
@@ -70,7 +73,7 @@ class StartWindow(QWidget):
         self.main_layout.addStretch()
 
         # Set the background image with slight transparency
-        self.set_background_image(os.path.join(os.path.dirname(__file__), '..', 'public', 'logo_bw.png'))
+        self.set_background_image(os.path.join(get_package_dir(), 'public', 'logo_bw.png'))
 
         # Initialize placeholders for orthogonal views and header information
         self.sagittal_view = QLabel(self)
@@ -128,6 +131,8 @@ class StartWindow(QWidget):
             with open(file_name, "rb") as file:
                 project_data = pickle.load(file)
 
+            saved_version = project_data.get('version')
+
             # Unpack saved data
             fileInfo             = project_data['fileInfo']
             atlasInfo            = project_data['atlasInfo']
@@ -170,6 +175,25 @@ class StartWindow(QWidget):
             # showMaximized (not show): the platform-guaranteed way to open the
             # main window maximized on macOS — pre-show geometry/state tricks in
             # BrainNav.__init__ were unreliable and left panes off-screen.
+
+            # MessageLogger buffers pre-init writes, so these surface in the UI
+            # log once init_message_box() runs during BrainNav.__init__.
+            if saved_version is None:
+                self.main_window.message_box.warn(
+                    f"Project file has no version tag (expected {PROJECT_FILE_FORMAT_VERSION}); "
+                    "some fields may load with defaults."
+                )
+            elif saved_version != PROJECT_FILE_FORMAT_VERSION:
+                self.main_window.message_box.warn(
+                    f"Project file format version {saved_version} differs from current "
+                    f"{PROJECT_FILE_FORMAT_VERSION}; some fields may not restore cleanly."
+                )
+            self.main_window.message_box.info(
+                f"Project loaded: {os.path.basename(file_name)} "
+                f"({len(fileInfo)} statmaps, {len(templates)} templates, "
+                f"{len(atlasInfo)} atlas entries)"
+            )
+
             self.main_window.showMaximized()
             self.close()
             
@@ -475,8 +499,8 @@ class StartWindow(QWidget):
         start_input['tdf'] = self.tdf
 
         # We always have the same template dir (there are the default templates)
-        start_input['template_dir'] = os.path.join(os.path.dirname(__file__), '..', 'public/templates')
-        start_input['template_mask_fp'] = os.path.join(os.path.dirname(__file__), '..', 'public/template_masks' ,'mni_template_icbm152_inmask.nii')
+        start_input['template_dir'] = os.path.join(get_package_dir(), 'public', 'templates')
+        start_input['template_mask_fp'] = os.path.join(get_package_dir(), 'public', 'template_masks', 'mni_template_icbm152_inmask.nii')
 
 
         # Define the fileype in case auto detection returned None. 

@@ -199,7 +199,7 @@ class LeftSideBar(QWidget):
             clusterlist_exists = 'clusterlist' in fileInfo[file_nr]
 
             if gradmap is True and clusterlist_exists:
-                self.brain_nav.message_box.log_message("<span style='color: orange;'>Warning: No clustermap computed for selected template, do you want to do this now?</span>")
+                self.brain_nav.message_box.warn("No clustermap computed for selected template, do you want to do this now?")
                 print("\033[38;5;214m"  # Orange terminal output
                       "Warning: No clustermap computed for selected template, do you want to compute it now?\033[0m")
                 
@@ -259,7 +259,7 @@ class LeftSideBar(QWidget):
             if method is not None:
                 self.brain_nav.WBTing.reset_threshold_slider(method)
 
-            self.brain_nav.message_box.log_message(f"<span style='color: white;'>Selected Map: {item_widget.file_name_label.text()}</span>")
+            self.brain_nav.message_box.info(f"Selected Map: {item_widget.file_name_label.text()}")
         else:
             print("No item selected")
 
@@ -329,14 +329,16 @@ class LeftSideBar(QWidget):
             except KeyError:
                 clusterlist = None
 
-            # Compute and sort cluster metrics for the cluster list
-            ord_clusterlist, _, tblARI_df, _ = self.brain_nav.metrics.prepare_tblARI(clusterlist)
-
-            # Update the cluster image and table with computed metrics
-            _, _, tblARI_df = self.brain_nav.metrics.update_clust_img(ord_clusterlist, tblARI_df)
-
-            # Update the GUI table with new cluster metrics
-            self.brain_nav.tblARI.update_table(tblARI_df)
+            # Skip cluster table/overlay rendering when no thresholding has run
+            # yet for this statmap — prepare_tblARI returns an empty 4-tuple in
+            # that case, and update_clust_img / update_table aren't meaningful
+            # without real cluster data.
+            if clusterlist:
+                ord_clusterlist, _, tblARI_df, _ = self.brain_nav.metrics.prepare_tblARI(clusterlist)
+                _, _, tblARI_df = self.brain_nav.metrics.update_clust_img(ord_clusterlist, tblARI_df)
+                self.brain_nav.tblARI.update_table(tblARI_df)
+            else:
+                self.brain_nav.tblARI.clear_table()
 
             # Remap the xyz coordinates from old to new template ui space
             self.brain_nav.UIHelp.remap_ui_xyz(self.brain_nav.file_nr, xyz_prev, file_nr_template_prev, self.brain_nav.file_nr_template)
@@ -362,10 +364,12 @@ class LeftSideBar(QWidget):
             # Render the selected cluster in the 3D view
             self.brain_nav.threeDviewer.update_cluster_3d_view(clusLabel=clusID)
             
-            # set the gragmap_flag for this data and template combination to false. 
+            # set the gragmap_flag for this data and template combination to false.
             self.brain_nav.aligned_statMapInfo[(self.brain_nav.file_nr, self.brain_nav.file_nr_template)]['gradmap_flag'] = False
 
-        # self.log_message(f"<span style='color: white;'>Selected Template: {item_widget.file_name_label.text()}</span>")
+            self.brain_nav.message_box.info(
+                f"Template switched to: {selected_item.text()}"
+            )
 
 
     def add_template_to_list(self, file_path):

@@ -1,5 +1,5 @@
 from PyQt5.QtWidgets import QFileDialog
-from ari_application.error_handling.ErrorHandler import ErrorHandler
+
 
 class UploadFiles:
     """
@@ -27,8 +27,6 @@ class UploadFiles:
         Optional settings for upload routines.
     logger : logging.Logger
         Logger used for informational and error messages.
-    error_handler : ErrorHandler
-        Handler for exception capture and user-friendly error reporting.
 
     Methods
     -------
@@ -53,7 +51,6 @@ class UploadFiles:
         self.brain_nav = BrainNav
         self.config = config if config else {}
         self.logger = logger if logger else self._setup_default_logger()
-        self.error_handler = ErrorHandler(log_file='upload_files_errors.log')
 
     def _setup_default_logger(self):
         """
@@ -104,7 +101,9 @@ class UploadFiles:
                 #     self.brain_nav.nifti_loader.load_overlay(file_path)
             except Exception as e:
                 self.brain_nav.file_nr -= 1
-                self.error_handler.handle_exception(e)  # Use ErrorHandler to handle the exception
+                self.brain_nav.message_box.error(
+                    f"Failed to upload statistical image: {e}", exc_info=True
+                )
 
     def upload_template_dialog(self):
         """
@@ -122,7 +121,9 @@ class UploadFiles:
                 self.brain_nav.nifti_loader.load_bg(file_path)
             except Exception as e:
                 self.brain_nav.file_nr_template -= 1
-                self.error_handler.handle_exception(e)
+                self.brain_nav.message_box.error(
+                    f"Failed to upload template: {e}", exc_info=True
+                )
 
     def upload_codebook_dialog(self):
         """

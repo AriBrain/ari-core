@@ -28,6 +28,9 @@ dependencies = [
     "setuptools"
 ]
 
+[project.optional-dependencies]
+build = ["pyinstaller>=6.0"]
+
 [project.scripts]
 aribrain = "ari_application.main:main"
 

@@ -54,6 +54,21 @@ class pyARI:
     
         progress = QProgressDialog("Initializing ARI analysis...", "Cancel", 0, TOTAL_STEPS, self.brain_nav.main_window)
         progress.setWindowModality(Qt.WindowModal)
+        progress.setMinimumWidth(360)
+        # Default QProgressDialog layout has the Cancel button flush against the
+        # progress bar; push the button down rather than padding the bar — that
+        # keeps the percentage text centred inside the bar instead of squishing it.
+        progress.setStyleSheet("""
+            QProgressBar {
+                text-align: center;
+                min-height: 20px;
+            }
+            QPushButton {
+                min-width: 90px;
+                padding: 6px 14px;
+                margin-top: 10px;
+            }
+        """)
         # Give the Cancel button its own row instead of touching the bar.
         from ari_application.resources.styles import Styles
         progress.setStyleSheet(Styles.progress_dialog_styling)
@@ -106,7 +121,10 @@ class pyARI:
         progress.setValue(5)
 
         if mintdp == 0:
-            print("No significant brain activations can be detected.")
+            self.brain_nav.message_box.error(
+                f"No significant brain activations detected at alpha={alpha}. "
+                "Try a less stringent alpha, or check whether the input map is correct."
+            )
             return None
         
         print('entering findHalpha')
@@ -192,6 +210,21 @@ class pyARI:
         progress.setLabelText("Computing cluster TDP values...")
         tdps    = ARI_C.py_forestTDP(m, halpha, alpha, simeshalpha, p.tolist(), reslist["SIZE"], reslist["ROOT"], reslist["CHILD"])
         progress.setValue(HOMMEL_STEPS + HALPHA_STEPS + ADJLIST_STEPS + CLUSTERS_STEPS + TDP_STEPS)
+
+        # Sentinel check: forestTDP can return all -1 when the indexing into the
+        # Cython routine is off (see docs/BUG_REPORT_hommel_indexing.md). Surface
+        # the TDP range so silent corruption is caught here, not three screens later.
+        valid_tdps = [t for t in tdps if t >= 0]
+        if not valid_tdps:
+            self.brain_nav.message_box.warn(
+                "forestTDP returned no valid TDP values; downstream cluster maps may be corrupted. "
+                "Check input indexing."
+            )
+        else:
+            self.brain_nav.message_box.info(
+                f"TDP computation complete: {len(valid_tdps)} cluster nodes, "
+                f"TDP range [{min(valid_tdps):.3f}, {max(valid_tdps):.3f}]"
+            )
 
         # Query preparation step
         print('entering py_queryPreparation')

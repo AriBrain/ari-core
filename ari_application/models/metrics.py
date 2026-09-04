@@ -78,8 +78,9 @@ class Metrics:
                     voxel_value = 'None'
                 else:
                     voxel_value = int(round(voxel_value))
-            except:
-                voxel_value = 'None' 
+            except Exception:
+                # Runs on every crosshair move — stay silent to avoid log spam.
+                voxel_value = 'None'
 
         else:
             voxel_value = 'None'
@@ -96,7 +97,7 @@ class Metrics:
                 atlas_region_code = atlasInfo['data'][x, y, z]
                 atlas_region_name = atlasInfo['codebook'].get(atlas_region_code, 'Undefined')
             except Exception as e:
-                print(f"Failed to retrieve atlas region: {e}")
+                self.brain_nav.message_box.debug(f"Failed to retrieve atlas region: {e}")
                 atlas_region_name = 'None'
 
         # Metrics when data is available
@@ -119,7 +120,8 @@ class Metrics:
             # BrainNav.mni_coord_boxes['y'].setValue(MNI_xyzs[1])
             # BrainNav.mni_coord_boxes['z'].setValue(MNI_xyzs[2])
 
-        except:
+        except Exception:
+            # Runs on every crosshair move — stay silent to avoid log spam.
             dims = 'None'
             voxelsize = 'None'
             MNI_xyzs = 'None'
@@ -386,12 +388,9 @@ class Metrics:
             reset_color = "\033[0m"          # Resets color back to default
             print(f"{orange_text}Warning! Only one voxel remains at the threshold — maintaining current crosshair.{reset_color}")
             
-            message = (
-                        f"<span style='color: orange; font-weight: bold;'>"
-                        f"WARNING! Only one voxel remains at the threshold — maintaining current crosshair."
-                        f"</span>"
-                        )
-            self.brain_nav.message_box.log_message(message)
+            self.brain_nav.message_box.warn(
+                "Only one voxel remains at the threshold — maintaining current crosshair."
+            )
             
             return
 
@@ -738,14 +737,18 @@ class Metrics:
         file_nr_template = self.brain_nav.file_nr_template
         lm_ids_df = self.brain_nav.fileInfo[file_nr]['stable_LM_ids_df']
 
-        # Handle the case where no clusters are found
+        # Handle the case where no clusters are found.
+        # show_modal_dialog never existed on BrainNav — this branch used to crash.
+        # Now: emit a structured warning, return a well-formed empty 4-tuple so
+        # callers' tuple-unpack doesn't blow up, and let them decide whether to
+        # clear the table or skip rendering.
         if clusterlist is None or len(clusterlist) == 0:
-            # Show a modal dialog to the user if no clusters were formed with the current threshold
-            self.brain_nav.show_modal_dialog(
-                "No clusters",
-                "No clusters can be formed with the given TDP threshold. Please reduce the threshold."
+            self.brain_nav.message_box.warn(
+                "No clusters available for this map/template — run thresholding "
+                "(TDP or Z-score) to populate the cluster table."
             )
-            return
+            empty_df = pd.DataFrame()
+            return [], np.empty((0, 0)), empty_df, np.empty((0, 3), dtype=int)
         # Get the number of clusters from the provided cluster list
         n = len(clusterlist)
         
@@ -838,7 +841,7 @@ class Metrics:
                     atlas_region_code = atlasInfo['data'][x_ui, y_ui, z_ui]
                     atlas_region_name = atlasInfo['codebook'].get(atlas_region_code, 'Undefined')
                 except Exception as e:
-                    print(f"Error retrieving atlas region: {e}")
+                    self.brain_nav.message_box.debug(f"Failed to retrieve atlas region: {e}")
                     atlas_region_name = 'None'
 
                 atlas_names.append(atlas_region_name)
@@ -860,8 +863,9 @@ class Metrics:
             if clusterlist[i][clus_size - 1] < len(self.brain_nav.fileInfo[file_nr]['tdps']):
                 clus_tdp = self.brain_nav.fileInfo[file_nr]['tdps'][clusterlist[i][clus_size - 1]]
             else:
-                # If the index is out of bounds, print a warning
-                print(f"Index {clusterlist[i][clus_size - 1]} is out of bounds for TDP list")
+                self.brain_nav.message_box.warn(
+                    f"Index {clusterlist[i][clus_size - 1]} is out of bounds for TDP list"
+                )
 
             # Append the calculated statistics for the current cluster to the tblARI list
             tblARI.append([
@@ -898,8 +902,11 @@ class Metrics:
                 # MNI_xyzs = self.xyz2MNI(np.array(xyz_max_ui[0]), self.brain_nav.fileInfo[file_nr]['rtr_template_affine'])
                 MNI_xyzs = self.xyz2MNI(np.array(xyz_max_ui[0]), self.brain_nav.aligned_templateInfo[(file_nr, self.brain_nav.file_nr_template)]['rtr_template_affine'] )
 
-            except:
-                MNI_xyzs [0, 0, 0]
+            except Exception as e:
+                self.brain_nav.message_box.warn(
+                    f"Failed to map cluster voxel to MNI space; falling back to (0,0,0): {e}"
+                )
+                MNI_xyzs = np.array([0, 0, 0])
 
             xyzM = [f"({int(MNI_xyzs[0]):>4}, {int(MNI_xyzs[1]):>4}, {int(MNI_xyzs[2]):>4})"]
 
@@ -918,8 +925,11 @@ class Metrics:
                 # MNI_xyzs = self.xyz2MNI(np.array(xyz_max_ui), self.brain_nav.fileInfo[file_nr]['rtr_tamplate_affine'])
                 MNI_xyzs = self.xyz2MNI(np.array(xyz_max_ui), self.brain_nav.aligned_templateInfo[(file_nr, self.brain_nav.file_nr_template)]['rtr_template_affine'] )
 
-            except:
-                MNI_xyzs [0, 0, 0]
+            except Exception as e:
+                self.brain_nav.message_box.warn(
+                    f"Failed to map cluster voxels to MNI space; falling back to zeros: {e}"
+                )
+                MNI_xyzs = np.zeros((max(len(xyz_max_ui), 1), 3), dtype=int)
             # MNI_xyzs = self.xyz2MNI(Vox_xyzs, self.brain_nav.image.affine)
             xyzM = [f"{x[0]}, {x[1]}, {x[2]}" for x in MNI_xyzs]
 
@@ -1025,12 +1035,9 @@ class Metrics:
 
         # Check if 'img_clus' exists in fileInfo for the current file number
         if 'img_clus' not in self.brain_nav.fileInfo[file_nr]:
-            warning_message = (
-                f"<span style='color: orange; font-weight: bold;'>"
-                f"Warning: No clusters found, first run a thresholding analysis (TDP or ZSCORE based)."
-                f"</span>"
+            self.brain_nav.message_box.warn(
+                "No clusters found, first run a thresholding analysis (TDP or ZSCORE based)."
             )
-            self.brain_nav.message_box.log_message(warning_message)
             return
 
         xtr, ytr, ztr = self.brain_nav.sagittal_slice, self.brain_nav.coronal_slice, self.brain_nav.axial_slice
@@ -1130,12 +1137,9 @@ class Metrics:
             #     self.brain_nav.reset_highlight()
         else:
             print("\033[91m" + "No cluster found at the current location." + "\033[0m")
-            message = (
-                    f"<span style='color: orange; font-weight: bold;'>"
-                    f"Warning! No cluster found at the current location. Make sure to select a cluster."
-                    f"</span>"
-                )
-            self.brain_nav.message_box.log_message(message)
+            self.brain_nav.message_box.warn(
+                "No cluster found at the current location. Make sure to select a cluster."
+            )
 
     def modulate_cluster_threshold(self, file_nr, cluster_label, new_tdp_threshold, tdp_change):
         """
@@ -1209,8 +1213,8 @@ class Metrics:
                 f"Cluster Label History: {formatted_cluster_labels}<br>"
                 f"XYZ History: {formatted_xyz_history}<br><br>"
             )
-            self.brain_nav.message_box.log_message(message)
-                                
+            self.brain_nav.message_box.info(message, html=True)
+
         # Retrieve hierarchical data
         stcs = file_info['stcs']                 # Supra-threshold clusters
         marks = file_info['marks']               # Marking array
@@ -1253,14 +1257,9 @@ class Metrics:
             updated_clusters = file_info['clusterlist'] # old cluster list (misnomer)
             # print(f"Change Query Error {error_info['error_code']}: {error_info['error_message']}")
             print("\033[91m" + f"ERROR! Change Query Error {error_info['error_code']}: {error_info['error_message']}" + "\033[0m")
-            # Construct the styled error message
-            message = (
-                f"<span style='color: red; font-weight: bold;'>"
-                f"ERROR! Change Query Error {error_info['error_code']}: {error_info['error_message']}"
-                f"</span>"
+            self.brain_nav.message_box.error(
+                f"Change Query Error {error_info['error_code']}: {error_info['error_message']}"
             )
-            # Send the formatted message to the message log
-            self.brain_nav.message_box.log_message(message)
             # return updated_clusters
 
         # Call the C++ changeQuery function generally faster!
@@ -1327,7 +1326,7 @@ class Metrics:
             f"Cluster Label History: {formatted_cluster_labels}<br>"
             f"XYZ History: {formatted_xyz_history}<br><br>"
         )
-        self.brain_nav.message_box.log_message(message)
+        self.brain_nav.message_box.info(message, html=True)
 
         return updated_clusters
 
@@ -1343,7 +1342,7 @@ class Metrics:
         # Ensure history exists before using it
         if 'clusterlist_history' not in file_info or not file_info['clusterlist_history']:
             print("\033[91mNo history available.\033[0m")
-            self.brain_nav.message_box.log_message("<span style='color: red;'>No history available.</span>")
+            self.brain_nav.message_box.warn("No history available.")
             return
 
         step = file_info.get('step', 0)
@@ -1352,13 +1351,13 @@ class Metrics:
         if sender == self.brain_nav.cluster_ws.prev_state_button:
             if step - 1 < 0:
                 print("\033[91m This is the earliest state in memory!\033[0m")
-                self.brain_nav.message_box.log_message("<span style='color: red;'>This is the earliest state in memory!</span>")
+                self.brain_nav.message_box.warn("This is the earliest state in memory!")
                 # return
             step = max(0, step - 1)  # Prevent step from going below 0
         elif sender == self.brain_nav.cluster_ws.next_state_button:
             if step >= max_step:
                 print("\033[91m This is the most recent state!\033[0m")
-                self.brain_nav.message_box.log_message("<span style='color: red;'>This is the most recent state!</span>")
+                self.brain_nav.message_box.warn("This is the most recent state!")
                 return
             else:
                 step += 1
@@ -1404,7 +1403,7 @@ class Metrics:
             f"Cluster Label: {label if label is not None else 'N/A'}<br>"
             f"Coordinates: (x={x}, y={y}, z={z})<br>"
         )
-        self.brain_nav.message_box.log_message(message)
+        self.brain_nav.message_box.info(message, html=True)
 
         # Recompute table data
         ord_clusterlist, _, tblARI_df, _ = self.prepare_tblARI(clusterlist)
