@@ -247,15 +247,13 @@ class BrainNav(QMainWindow):
 
         # === Set Window Properties === #
         self.setWindowTitle("ARIBrain")
-        # Maximize via window state rather than setGeometry: setGeometry sizes
-        # the CLIENT area, so passing the screen's available rect made the
-        # contents that tall and the title bar was added on top — the window
-        # bottom (work station + message log) hung ~28px off-screen until the
-        # user double-clicked the title bar (macOS zoom sets the FRAME to the
-        # available rect, which is what we want from the start). Flagging the
-        # state here means the later .show() opens the window properly
-        # maximized with OS-computed, frame-aware geometry.
-        self.setWindowState(Qt.WindowMaximized)
+        # Maximization happens at the show site (StartWindow calls
+        # showMaximized()) — the platform-guaranteed route on macOS. Setting
+        # the window state or geometry here pre-show proved unreliable:
+        # setGeometry sizes the CLIENT area (title bar added on top pushed
+        # the bottom panes off-screen), and a pre-show
+        # setWindowState(WindowMaximized) can be ignored by the platform
+        # plugin.
 
         # === Central Widget & Layout === #
         self.central_widget = QWidget()

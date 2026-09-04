@@ -226,8 +226,14 @@ class InitiateTabs(QWidget):
         self.roi_analysis_tab_index = self.tab_widget.indexOf(self.roi_analysis_tab)
         self.tab_widget.currentChanged.connect(self._on_tab_changed)
 
-        # Set the height of the entire container (including tabs)
-        half_height = self.brain_nav.height() // 2
+        # Set the height of the entire container (including tabs).
+        # Based on the screen, not the window: this runs during __init__
+        # before the window is shown, when self.brain_nav.height() still
+        # reports the pre-show Qt default (~480) rather than the maximized
+        # size — which shrank the tab area to ~240px and threw off the
+        # right column's layout.
+        from PyQt5.QtWidgets import QDesktopWidget
+        half_height = QDesktopWidget().availableGeometry().height() // 2
         self.table_container.setFixedHeight(half_height)
 
         # Add the tab widget to the main layout

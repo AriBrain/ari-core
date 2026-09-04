@@ -164,7 +164,10 @@ class StartWindow(QWidget):
 
             # Create and show the main window
             self.main_window = BrainNav(start_input, load_data=True, data2load=data_package)
-            self.main_window.show()
+            # showMaximized (not show): the platform-guaranteed way to open the
+            # main window maximized on macOS — pre-show geometry/state tricks in
+            # BrainNav.__init__ were unreliable and left panes off-screen.
+            self.main_window.showMaximized()
             self.close()
             
     def transition_to_import_data(self):
@@ -502,7 +505,10 @@ class StartWindow(QWidget):
         # Instantiate the main window and pass the start_input dictionary
         self.main_window = BrainNav(start_input)
 
-        self.main_window.show()
+        # showMaximized (not show): the platform-guaranteed way to open the
+        # main window maximized on macOS — pre-show geometry/state tricks in
+        # BrainNav.__init__ were unreliable and left panes off-screen.
+        self.main_window.showMaximized()
 
         # Close the current start window
         self.close()
