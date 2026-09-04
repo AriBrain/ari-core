@@ -288,6 +288,70 @@ class TblROI(QWidget):
         ]
         self.update_table(pd.DataFrame(rows))
 
+    def show_placeholder(self):
+        """Reset the table to the pre-analysis single-row hint."""
+        self.table_widget.blockSignals(True)
+        self.table_widget.clearContents()
+        self.table_widget.clearSpans()
+        self.table_widget.setRowCount(1)
+        placeholder = QTableWidgetItem(
+            "Upload a user atlas and click Run to populate this table."
+        )
+        placeholder.setTextAlignment(Qt.AlignCenter)
+        self.table_widget.setItem(0, 0, placeholder)
+        self.table_widget.setSpan(0, 0, 1, len(self.COLUMNS))
+        self.table_widget.blockSignals(False)
+
+    def restore_from_session(self):
+        """
+        Sync the whole ROI operating panel with the current session state —
+        called after a .ari project load (or an atlas restore failure) so the
+        tab reflects reality: buttons enabled only when an atlas is loaded,
+        count readout, table contents (results if present, codebook preview
+        otherwise, placeholder when there's no atlas at all), and the colour
+        toggle synced to ui_params without re-triggering renders.
+        """
+        bn = self.brain_nav
+        has_atlas = bool(bn.userAtlasInfo)
+
+        self.atlas_codebook_button.setEnabled(has_atlas)
+        self.atlas_run_button.setEnabled(has_atlas)
+
+        if not has_atlas:
+            self.set_roi_count(None)
+            self.colour_mode_selector.blockSignals(True)
+            self.colour_mode_selector.setCurrentText('Categorical')
+            self.colour_mode_selector.blockSignals(False)
+            self.colour_mode_selector.setEnabled(False)
+            self.show_placeholder()
+            return
+
+        sample = next(iter(bn.userAtlasInfo.values()))
+        self.set_roi_count(len(sample.get('codebook') or {}))
+
+        tbl = bn.fileInfo.get(bn.file_nr, {}).get('tblROI_df')
+        if tbl is not None and not getattr(tbl, 'empty', True):
+            self.update_table(tbl)
+        else:
+            self.populate_from_codebook(sample.get('codebook') or {})
+
+        # Heatmap toggle only when a TDP LUT exists (analysis was run and
+        # its artifacts were rebuilt on load).
+        has_heat = any(
+            e.get('tdp_lut') is not None for e in bn.userAtlasInfo.values()
+        )
+        self.colour_mode_selector.blockSignals(True)
+        mode = bn.ui_params.get('atlas_colour_mode', 'categorical')
+        if not has_heat and mode == 'heatmap':
+            # Saved mode can't be honoured without a LUT — fall back.
+            bn.ui_params['atlas_colour_mode'] = 'categorical'
+            mode = 'categorical'
+        self.colour_mode_selector.setCurrentText(
+            'TDP heatmap' if mode == 'heatmap' else 'Categorical'
+        )
+        self.colour_mode_selector.blockSignals(False)
+        self.colour_mode_selector.setEnabled(has_heat)
+
     def select_roi_row(self, roi_label):
         """
         Highlight and scroll to the row for a given ROI label, without

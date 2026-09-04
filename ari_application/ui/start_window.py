@@ -159,7 +159,10 @@ class StartWindow(QWidget):
                 'ranges': ranges,
                 'start_input': start_input,
                 'stat_image_names': stat_image_names,
-                'template_names': template_names
+                'template_names': template_names,
+                # Slim user-atlas metadata (path + codebook); BrainNav
+                # re-aligns from disk after init. Absent in older files.
+                'user_atlas': project_data.get('user_atlas'),
             }
 
             # Create and show the main window

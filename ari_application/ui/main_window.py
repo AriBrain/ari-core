@@ -294,6 +294,11 @@ class BrainNav(QMainWindow):
             self.metrics.update_overlay_image(self.file_nr, cluster_label=None)
             self.metrics.show_metrics()
             self.orth_view_setup.setup_viewer()
+            # Re-align the user atlas from its saved path (aligned volumes
+            # aren't pickled — kept out to keep .ari files small) and sync
+            # the ROI tab UI. Also clears stale atlas state when the loaded
+            # project has none.
+            self.save_export.restore_user_atlas_state(data2load.get('user_atlas'))
   
         # show default metrics
         self.metrics.show_metrics()
