@@ -54,6 +54,10 @@ class pyARI:
     
         progress = QProgressDialog("Initializing ARI analysis...", "Cancel", 0, TOTAL_STEPS, self.brain_nav.main_window)
         progress.setWindowModality(Qt.WindowModal)
+        # Give the Cancel button its own row instead of touching the bar.
+        from ari_application.resources.styles import Styles
+        progress.setStyleSheet(Styles.progress_dialog_styling)
+        progress.setMinimumWidth(360)
         progress.setValue(0)
         progress.show()
 

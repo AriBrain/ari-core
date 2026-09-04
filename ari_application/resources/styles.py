@@ -114,6 +114,22 @@ class Styles:
             "background-color: #091c13;"   # Set background color
         ]
 
+    # Shared styling for QProgressDialogs (ARI run, ROI TDP computation).
+    # The default layout puts the Cancel button flush against the progress
+    # bar; the button margin pushes it onto its own row, and the bar keeps
+    # its percentage text centred instead of squished.
+    progress_dialog_styling = """
+            QProgressBar {
+                text-align: center;
+                min-height: 20px;
+            }
+            QPushButton {
+                min-width: 90px;
+                padding: 6px 14px;
+                margin-top: 10px;
+            }
+        """
+
     @staticmethod
     def orth_title_style(text, width=400, height=20):
         label = QLabel(text)

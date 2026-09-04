@@ -224,6 +224,21 @@ class InitiateTabs(QWidget):
         # mutate cluster state (and drop the cluster from the 3D viewer)
         # while the user is looking at ROIs.
         self.roi_analysis_tab_index = self.tab_widget.indexOf(self.roi_analysis_tab)
+
+        # Tab groups for view-context save/restore: the two cluster-analysis
+        # tabs share one visual context, the ROI tab has its own, and
+        # Save/Load is neutral (switching to it changes nothing). Crossing
+        # between the cluster and roi groups snapshots the outgoing view
+        # (selection + overlay mode) and re-establishes the incoming one, so
+        # users can bounce between analyses without losing where they were.
+        self._tab_group_by_index = {
+            self.tab_widget.indexOf(whole_brain_tab): 'cluster',
+            self.tab_widget.indexOf(cluster_tab): 'cluster',
+            self.roi_analysis_tab_index: 'roi',
+            self.tab_widget.indexOf(self.save_export_tab): None,
+        }
+        self._active_context_group = 'cluster'
+
         self.tab_widget.currentChanged.connect(self._on_tab_changed)
 
         # Set the height of the entire container (including tabs).
@@ -288,6 +303,22 @@ class InitiateTabs(QWidget):
             if base is not None:
                 self.table_container.setFixedHeight(base)
             ws_container.setVisible(True)
+
+        # --- View-context save/restore across the cluster <-> roi groups ---
+        # Neutral tabs (Save/Load) don't change the active context, so
+        # bouncing through them and back to the same group leaves the view
+        # untouched. Only a genuine group crossing snapshots the outgoing
+        # context and re-establishes the incoming one.
+        new_group = self._tab_group_by_index.get(index)
+        metrics = getattr(self.brain_nav, 'metrics', None)
+        if (
+            metrics is not None
+            and new_group is not None
+            and new_group != self._active_context_group
+        ):
+            metrics.save_view_context(self._active_context_group)
+            metrics.restore_view_context(new_group)
+            self._active_context_group = new_group
 
     def init_metrics_container(self):
         # Create the metrics layout

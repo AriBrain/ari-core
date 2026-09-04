@@ -19,6 +19,7 @@ import ari_application.cpp_extensions.cython_modules.ARICluster as ARI_C
 from ari_application.analyses.getClusters import get_clusters
 from ari_application.analyses.hommel import pyHommel
 from ari_application.models.image_processing import ImageProcessing
+from ari_application.resources.styles import Styles
 
 # To do: some functions, toward the end of this class can and should be moved to util.py as they are helper functions. 
 
@@ -544,6 +545,9 @@ class Metrics:
 
         progress = QProgressDialog("Computing tdp for z-based clusters...", "Cancel", 0, len(cluster_ids), self.brain_nav.main_window)
         progress.setWindowModality(Qt.WindowModal)
+        # Shared dialog styling: Cancel on its own row, not touching the bar.
+        progress.setStyleSheet(Styles.progress_dialog_styling)
+        progress.setMinimumWidth(360)
         progress.setValue(0)
         progress.show()
 
@@ -2054,6 +2058,9 @@ class Metrics:
             self.brain_nav.main_window,
         )
         progress.setWindowModality(Qt.WindowModal)
+        # Shared dialog styling: Cancel on its own row, not touching the bar.
+        progress.setStyleSheet(Styles.progress_dialog_styling)
+        progress.setMinimumWidth(360)
         progress.setMinimumDuration(0)  # show immediately, no half-second delay
         progress.setValue(0)
         progress.setLabelText("Preparing Hommel decomposition...")
@@ -2215,6 +2222,114 @@ class Metrics:
             tdp_lut[label] = [int(r * 255), int(g * 255), int(b * 255), alpha_byte]
 
         return tdp_lut, (vmin, vmax)
+
+    def save_view_context(self, group):
+        """
+        Snapshot the current visual context (selection + overlay mode) for a
+        tab group before the user switches to the other analysis context.
+        Stored on ui_params so it rides along into .ari project saves.
+
+        Groups: 'cluster' (Whole Brain TDP / Cluster Analysis tabs) and
+        'roi' (ROI Analysis tab). The tables themselves already persist —
+        this only captures what the orthviews / 3D viewer were showing.
+        """
+        ui = self.brain_nav.ui_params
+        crosshair = (
+            self.brain_nav.sagittal_slice,
+            self.brain_nav.coronal_slice,
+            self.brain_nav.axial_slice,
+        )
+        if group == 'cluster':
+            ui['cluster_view_context'] = {
+                'selected_cluster_id': ui.get('selected_cluster_id'),
+                'selected_row': ui.get('selected_row'),
+                'crosshair': crosshair,
+            }
+        elif group == 'roi':
+            mode = ui.get('overlay_mode')
+            ui['roi_view_context'] = {
+                'selected_roi_label': ui.get('selected_roi_label'),
+                # Only persist an atlas-family mode; if the user never got
+                # into atlas view (e.g. no atlas loaded on a prior visit),
+                # default the next visit to the verification overlay.
+                'overlay_mode': mode if mode in ('atlas', 'roi') else 'atlas',
+                'crosshair': crosshair,
+            }
+
+    def _apply_saved_crosshair(self, ctx):
+        """Restore the crosshair slices from a saved view context, if any."""
+        crosshair = ctx.get('crosshair')
+        if crosshair is not None and len(crosshair) == 3:
+            self.brain_nav.sagittal_slice = int(crosshair[0])
+            self.brain_nav.coronal_slice = int(crosshair[1])
+            self.brain_nav.axial_slice = int(crosshair[2])
+
+    def restore_view_context(self, group):
+        """
+        Re-establish a previously saved visual context when the user returns
+        to a tab group: overlay mode, selection, 3D viewer AND crosshair
+        position — each analysis context keeps its own navigation spot.
+        """
+        ui = self.brain_nav.ui_params
+        file_nr = self.brain_nav.file_nr
+        file_nr_template = self.brain_nav.file_nr_template
+
+        if group == 'roi':
+            atlas_key = self._resolve_atlas_key(file_nr, file_nr_template)
+            if atlas_key not in self.brain_nav.userAtlasInfo:
+                # No atlas for the active view — nothing meaningful to show
+                # on this tab yet; leave the current view untouched.
+                return
+
+            ctx = ui.get('roi_view_context') or {}
+            self._apply_saved_crosshair(ctx)
+            label = ctx.get('selected_roi_label')
+            if label is not None:
+                # Re-renders overlay + contour + 3D and re-selects the table
+                # row in one call. move_crosshair=False keeps the restored
+                # position rather than jumping to the ROI centroid.
+                self.follow_roi_xyz(int(label), move_crosshair=False)
+            else:
+                # First visit (or nothing was selected): verification overlay.
+                ui['overlay_mode'] = ctx.get('overlay_mode', 'atlas')
+                ui['selected_roi_label'] = None
+                self.brain_nav.orth_view_update.update_slices()
+                self.brain_nav.orth_view_update.update_crosshairs()
+                self.brain_nav.threeDviewer.update_cluster_3d_view()
+
+        elif group == 'cluster':
+            self._reset_to_cluster_mode()
+            ctx = ui.get('cluster_view_context') or {}
+            self._apply_saved_crosshair(ctx)
+            cid = ctx.get('selected_cluster_id')
+
+            # Validity check — thresholds may have changed while the user was
+            # in the ROI context, so the remembered cluster may be gone.
+            tbl = self.brain_nav.fileInfo.get(file_nr, {}).get('tblARI_df')
+            valid = (
+                cid is not None
+                and not isinstance(cid, (list, tuple))
+                and tbl is not None
+                and not getattr(tbl, 'empty', True)
+                and 'Unique ID' in tbl.columns
+                and cid in tbl['Unique ID'].values
+            )
+            if valid:
+                ui['selected_cluster_id'] = cid
+                if ctx.get('selected_row') is not None:
+                    ui['selected_row'] = ctx['selected_row']
+                self.brain_nav.orth_view_update.update_slices(selected_cluster_id=cid)
+                self.brain_nav.threeDviewer.update_cluster_3d_view(cid)
+            else:
+                # Nothing (still) selected — render the plain cluster overlay.
+                ui['selected_cluster_id'] = None
+                self.brain_nav.orth_view_update.update_slices()
+                self.brain_nav.threeDviewer.update_cluster_3d_view()
+            self.brain_nav.orth_view_update.update_crosshairs()
+            # Keep the xyz spinboxes in sync with the restored position.
+            ui_help = getattr(self.brain_nav, 'UIHelp', None)
+            if ui_help is not None:
+                ui_help.update_ui_xyz()
 
     def _reset_to_cluster_mode(self):
         """
