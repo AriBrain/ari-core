@@ -146,7 +146,11 @@ class UploadFiles:
         try:
             ok = self.brain_nav.nifti_loader.load_user_codebook(file_path)
         except Exception as e:
-            self.error_handler.handle_exception(e)
+            # ErrorHandler was removed on main (983bde7) — the leveled
+            # MessageLogger owns error reporting now.
+            self.brain_nav.message_box.error(
+                f"Failed to load codebook: {e}", exc_info=True
+            )
             return
 
         if not ok:
@@ -190,7 +194,11 @@ class UploadFiles:
         try:
             ok = self.brain_nav.nifti_loader.load_user_atlas(file_path)
         except Exception as e:
-            self.error_handler.handle_exception(e)
+            # ErrorHandler was removed on main (983bde7) — the leveled
+            # MessageLogger owns error reporting now.
+            self.brain_nav.message_box.error(
+                f"Failed to load atlas: {e}", exc_info=True
+            )
             return
 
         if not ok:

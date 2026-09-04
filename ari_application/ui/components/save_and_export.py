@@ -11,7 +11,9 @@ import nibabel as nib  # Required for handling NIfTI files
 # can't be transparently restored from older versions. Loaders compare against
 # this and warn the user if the saved version is higher (forward-incompatible)
 # or lower (defaults may have been used to fill missing fields).
-PROJECT_FILE_FORMAT_VERSION = 1
+# Version 2: slim fileInfo (hom + atlas_on_analysis_grid stripped at save)
+# and the 'user_atlas' metadata key for atlas-based sessions.
+PROJECT_FILE_FORMAT_VERSION = 2
 
 class SaveAndExportTab(QWidget):
     """
