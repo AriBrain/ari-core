@@ -24,7 +24,6 @@ class NiftiLoader:
         self.brain_nav = BrainNaV
 
     def load_bg(self, file_path):
-        # error_handler = ErrorHandler(log_file='nifti_loader_errors.log')  # Create an instance of ErrorHandler
         file_nr = self.brain_nav.file_nr
         # file_nr_template = self.brain_nav.file_nr_template
         
@@ -79,6 +78,14 @@ class NiftiLoader:
             image = nib.as_closest_canonical(image)
             data_out =  np.ascontiguousarray(image.get_fdata())
 
+            # Orientation mismatches between statmap and template are the most
+            # common cause of "the brain looks sideways" tickets — surface the
+            # loaded shape and axcodes so the user can sanity-check at a glance.
+            self.brain_nav.message_box.info(
+                f"Loaded statmap: {os.path.basename(fp)}, shape={data_out.shape}, "
+                f"orientation={''.join(nib.aff2axcodes(image.affine))}"
+            )
+
             # Initialize and set the statMap image and metadata in the BrainNav `templates` dictionary
             templates[file_nr_template] = {
                 'filename': os.path.basename(fp),       # Just the file name (e.g., 'activation_map.nii.gz')
@@ -132,9 +139,23 @@ class NiftiLoader:
             self.brain_nav.axial_slice      = tmpdata.shape[ self.brain_nav.axial_dim ] // 2 
 
         
+            # Display metrics and set up the viewer
+            # Metrics.show_metrics(self.brain_nav)
+            if hasattr(self, 'metrics'):
+                self.metrics.show_metrics()
+            # When load_bg runs during BrainNav.__init__ the crosshair widgets
+            # don't exist yet (they're built later by init_panes()); skip then
+            # and let the legitimate setup_viewer() call at the end of __init__
+            # (or after ARI completes) do the work. When load_bg is called later
+            # — e.g. from UploadFiles.upload_template_dialog — the widgets exist
+            # and the call runs as intended.
+            if hasattr(self.brain_nav, 'axial_crosshair_h'):
+                OrthViewSetup(self.brain_nav).setup_viewer()
+        
         except Exception as e:
-            print(f'Error in load_bg: {e}')
-            # error_handler.handle_exception(e)  # Use ErrorHandler to handle the exception
+            self.brain_nav.message_box.error(
+                f"Failed to load background template: {e}", exc_info=True
+            )
             return None, None
         
     def load_data_as_bg(self, file_path):
@@ -193,7 +214,9 @@ class NiftiLoader:
             self.load_atlases(image, ('data_as_template', file_nr))
             
         except Exception as e:
-            print(f"Error loading data as background: {e}")
+            self.brain_nav.message_box.error(
+                f"Failed to load data as background: {e}", exc_info=True
+            )
             return None
         
     # Under construction!
@@ -257,19 +280,18 @@ class NiftiLoader:
 
 
     def load_overlay(self, file_path):
-
-        # error_handler = ErrorHandler(log_file='nifti_loader_errors.log')  # Create an instance of ErrorHandler
-
         try:
             # Check the file type and add the fileInfo to the instance
             # in check_file_type the data is transposed. So ARI routine is run
-            # only on transposed data. This was done to align it with the R routine so 
-            # i could compare numbers. 
-            self.check_file_type(file_path) 
+            # only on transposed data. This was done to align it with the R routine so
+            # i could compare numbers.
+            self.check_file_type(file_path)
 
         except Exception as e:
+            self.brain_nav.message_box.error(
+                f"Failed to load overlay: {e}", exc_info=True
+            )
             return None
-            # error_handler.handle_exception(e)  # Use ErrorHandler to handle the exception
 
 
     def check_file_type(self, file_path):
@@ -315,7 +337,9 @@ class NiftiLoader:
             data = nib.load(file_path)
             fileInfo['valid'] = True
         except Exception as e:
-            print(f"Error loading file: {e}")
+            self.brain_nav.message_box.error(
+                f"Failed to load file: {e}", exc_info=True
+            )
             return
         
         file_nr = self.brain_nav.file_nr
@@ -415,12 +439,17 @@ class NiftiLoader:
                     try:
                         df = float(descrip.split("[")[1].split("]")[0])
                         self.brain_nav.input['tdf'] = df
-                        print(f"Determined df: {self.brain_nav.input['tdf']}")
+                        self.brain_nav.message_box.info(
+                            f"Determined df: {self.brain_nav.input['tdf']}"
+                        )
                     except (IndexError, ValueError):
-                        print("Could not determine degrees of freedom from the description.")
-                        pass
+                        self.brain_nav.message_box.warn(
+                            "Could not determine degrees of freedom from the description."
+                        )
                 except Exception as e:
-                    print(f"Error determining map type from description: {str(e)}")
+                    self.brain_nav.message_box.warn(
+                        f"Could not determine map type from description: {e}"
+                    )
                     ftype, tdf = self.ask_for_map_type(fileInfo)
                     fileInfo['type'] = ftype
                     self.brain_nav.input['tdf'] = tdf

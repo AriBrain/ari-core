@@ -109,6 +109,12 @@ class BrainNav(QMainWindow):
             'coronal': []
         }
 
+        # MessageLogger must exist before any subsystem that might log during
+        # construction (NiftiLoader.load_bg / load_overlay can fail and call
+        # message_box.error). Its widget is built later by init_message_box();
+        # pre-init writes are buffered and flushed then.
+        self.message_box        = MessageLogger(self)
+
         self.nifti_loader       = NiftiLoader(self)
 
         # If user started new project - i.e. does not a load an existing project
@@ -196,7 +202,6 @@ class BrainNav(QMainWindow):
         self.save_export        = SaveAndExportTab(self)
         self.initiate_tabs      = InitiateTabs(self)
         self.cluster_ws         = ClusterWorkStation(self)
-        self.message_box        = MessageLogger(self)
         self.left_side_bar      = LeftSideBar(self)
         self.orth_view_controls = OrthViewerControls(self)
         self.menu_bar           = MenuBar(self)

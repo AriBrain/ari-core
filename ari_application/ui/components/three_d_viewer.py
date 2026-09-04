@@ -280,11 +280,11 @@ class ThreeDViewer(QWidget):
         if self.brain_nav.ui_params['3d_brain_pause']:
             self.pause_3dviewer_button.setText("▶")  # Play symbol
             self.pause_3dviewer_button.setToolTip("Resume 3D updates")
-            self.brain_nav.message_box.log_message("3D viewer updates paused")
+            self.brain_nav.message_box.info("3D viewer updates paused")
         else:
             self.pause_3dviewer_button.setText("⏸")  # Pause symbol
             self.pause_3dviewer_button.setToolTip("Pause 3D updates")
-            self.brain_nav.message_box.log_message("3D viewer updates resumed")
+            self.brain_nav.message_box.info("3D viewer updates resumed")
             # Update the 3D view immediately when resuming
             self.update_cluster_3d_view()
 
@@ -301,9 +301,10 @@ class ThreeDViewer(QWidget):
             # Undock: Remove the 3D viewer container from its parent layout and make it a top-level window.
             try:
                 self.brain_nav.cluster_viewer_container.removeWidget(self.cluster_3d_view_container)
-                print("Removed cluster_3d_view_container from metrics_container_layout.")
-            except Exception as e:
-                print("Error removing widget:", e)
+            except Exception:
+                self.brain_nav.message_box.error(
+                    "Failed to undock 3D viewer", exc_info=True
+                )
 
             # Put a dark placeholder in that spot so the tile doesn't collapse
             self.brain_nav.cluster_viewer_container.addWidget(self.empty_placeholder)
