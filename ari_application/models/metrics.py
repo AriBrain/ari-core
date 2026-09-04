@@ -1966,78 +1966,39 @@ class Metrics:
         self.brain_nav.fileInfo[file_nr]['hom'] = hom
         return hom
 
-    def _get_volume_to_mask_lookup(self, file_nr):
-        """
-        Build, cache, and return an int32 lookup `inv` such that
-        `inv[volume_linear_idx]` is the 0-based brain-mask position, or
-        -1 if that volume voxel isn't in the mask.
-
-        Built from `indexp_linear` (the m-length array of 0-based volume
-        linear indices for each mask voxel). Cached on fileInfo as
-        '_volume_to_mask' so each subsequent ROI query is O(1) per voxel.
-
-        Memory: one int32 per voxel of the post-transpose volume. For a
-        91*109*91 statmap that's ~3.6 MB; reasonable for the cache hit
-        we get on every ROI.
-        """
-        cached = self.brain_nav.fileInfo[file_nr].get('_volume_to_mask')
-        if cached is not None:
-            return cached
-
-        indexp_linear = self.brain_nav.fileInfo[file_nr]['indexp_linear']
-        volDim = self.brain_nav.fileInfo[file_nr]['tr_volDim']
-        n_volume_voxels = int(np.prod(volDim))
-
-        # -1 sentinel marks voxels outside the brain mask.
-        inv = np.full(n_volume_voxels, -1, dtype=np.int32)
-        inv[indexp_linear] = np.arange(len(indexp_linear), dtype=np.int32)
-
-        self.brain_nav.fileInfo[file_nr]['_volume_to_mask'] = inv
-        return inv
-
     def _mask_positions_for_roi(self, file_nr, file_nr_template, roi_label, atlas_key):
         """
-        Resolve a single ROI label to the 0-based brain-mask positions
-        its voxels occupy. The walk:
+        Resolve a single ROI label to the 0-based brain-mask positions its
+        voxels occupy on the analysis grid.
 
-            atlas[t_x, t_y, t_z] == label
-                                ↓
-            aligned_index_data[t_x, t_y, t_z]   # 1-based volume index
-                                ↓ subtract 1
-            volume linear index (0-based, into the post-transpose
-            statmap volume)
-                                ↓ _volume_to_mask
-            mask position in [0, m), or -1 if the template voxel
-            doesn't map to any brain-mask voxel.
+        Uses fileInfo[file_nr]['atlas_on_analysis_grid'] — the atlas
+        resampled directly onto the statmap's canonical grid (built at atlas
+        upload; see NiftiLoader.load_user_atlas). Flat-indexing that grid
+        with indexp_linear yields a per-mask-voxel label array; np.where
+        picks out the positions for the requested ROI in one shot.
 
-        Returns a 0-based numpy int array suitable as `ix` for
-        hommel.Hommel.discoveries(ix=...). Empty when the ROI has no
-        voxels overlapping the brain mask.
+        No template hop, no aligned_index_data, no -1 sentinels — the
+        analysis runs entirely on the data grid. file_nr_template and
+        atlas_key are kept in the signature for backward compatibility with
+        earlier callers but aren't consulted here: ROI membership is
+        template-independent by construction now.
         """
-        atlas = self.brain_nav.userAtlasInfo[atlas_key]['data']
-        aligned_index_data = self.brain_nav.aligned_templateInfo[
-            (file_nr, file_nr_template)
-        ]['aligned_index_data']
-
-        roi_mask = (atlas == roi_label)
-        if not roi_mask.any():
+        file_info = self.brain_nav.fileInfo[file_nr]
+        atlas_grid = file_info.get('atlas_on_analysis_grid')
+        if atlas_grid is None:
+            # Atlas hasn't been aligned to this statmap's analysis grid —
+            # can happen if the atlas was loaded before this statmap. Ask
+            # the user to re-upload.
+            self.brain_nav.message_box.log_message(
+                "<span style='color: orange;'>Atlas isn't aligned to this "
+                "statmap's analysis grid. Re-upload the atlas after loading "
+                "the statmap.</span>"
+            )
             return np.array([], dtype=np.int32)
 
-        # aligned_index_data values: 1-based linear index into the post-
-        # transpose statmap volume; NaN/0 = template voxel outside the
-        # statmap's brain volume (most of the template, typically).
-        linear_in_roi = aligned_index_data[roi_mask]
-        linear_in_roi = linear_in_roi[~np.isnan(linear_in_roi)]
-        linear_in_roi = linear_in_roi[linear_in_roi > 0].astype(np.int64) - 1
-
-        if linear_in_roi.size == 0:
-            return np.array([], dtype=np.int32)
-
-        inv = self._get_volume_to_mask_lookup(file_nr)
-        mask_positions = inv[linear_in_roi]
-        # Drop the -1 sentinels (template voxels that fall inside the ROI
-        # but outside the actual brain mask).
-        return mask_positions[mask_positions >= 0]
+        indexp_linear = file_info['indexp_linear']
+        labels_at_mask = atlas_grid.ravel(order='C')[indexp_linear]
+        return np.where(labels_at_mask == int(roi_label))[0].astype(np.int32)
 
     def compute_roi_tdps(self, file_nr, file_nr_template):
         """

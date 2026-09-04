@@ -151,20 +151,24 @@ class UploadFiles:
         if not ok:
             return
 
-        # Refresh any existing ROI table with the new names. tblROI_df stores
-        # names in the 'ROI' column, so we rewrite that column from the new
-        # codebook (keyed by Label) rather than recomputing anything.
+        # Refresh the ROI table with the new names.
         file_nr = self.brain_nav.file_nr
+        atlas_key = self.brain_nav.metrics._resolve_atlas_key(
+            file_nr, self.brain_nav.file_nr_template,
+        )
+        new_codebook = self.brain_nav.userAtlasInfo[atlas_key]['codebook']
         tbl = self.brain_nav.fileInfo.get(file_nr, {}).get('tblROI_df')
         if tbl is not None and not tbl.empty:
-            atlas_key = self.brain_nav.metrics._resolve_atlas_key(
-                file_nr, self.brain_nav.file_nr_template,
-            )
-            new_codebook = self.brain_nav.userAtlasInfo[atlas_key]['codebook']
+            # An analysis has been run; keep TDPs and centroids, just rewrite
+            # the ROI-name column via Label -> new name.
             tbl['ROI'] = tbl['Label'].map(
                 lambda lbl: new_codebook.get(int(lbl), f"ROI {int(lbl)}")
             )
             self.brain_nav.tblROI.update_table(tbl)
+        else:
+            # No analysis yet — refresh the codebook-only preview so the
+            # renamed regions show up in the table right away.
+            self.brain_nav.tblROI.populate_from_codebook(new_codebook)
 
     def upload_atlas_dialog(self):
         """
@@ -204,5 +208,8 @@ class UploadFiles:
         sample_entry = next(iter(self.brain_nav.userAtlasInfo.values()), None)
         if sample_entry is not None:
             self.brain_nav.tblROI.set_roi_count(len(sample_entry['codebook']))
+            # Show the ROI list right away with placeholder TDP/centroid
+            # columns; compute_roi_tdps overwrites these when Run is clicked.
+            self.brain_nav.tblROI.populate_from_codebook(sample_entry['codebook'])
 
         self.brain_nav.orth_view_update.update_slices()

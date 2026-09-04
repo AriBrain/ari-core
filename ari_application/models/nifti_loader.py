@@ -269,6 +269,21 @@ class NiftiLoader:
             )
             return False
 
+        # Capture the atlas's spatial reference frame before canonical
+        # reorientation. Atlas-based TDP only makes sense when the atlas and
+        # the background data share a standard (MNI/Talairach) space, because
+        # align_images is a header-based resample — it reconciles grids but
+        # can't bring native-space data into MNI (that needs registration,
+        # which this app doesn't do).
+        atlas_space_code, atlas_space_label = self._spatial_space(atlas_img)
+        if atlas_space_code < 3:
+            self.brain_nav.message_box.log_message(
+                f"<span style='color: orange;'>Uploaded atlas reports a "
+                f"'{atlas_space_label}' spatial frame, not a standard "
+                f"(MNI/Talairach) space. If the atlas isn't in MNI space, its "
+                f"alignment to the data will be unreliable.</span>"
+            )
+
         atlas_img = nib.as_closest_canonical(atlas_img)
         atlas_data = atlas_img.get_fdata()
 
@@ -320,10 +335,17 @@ class NiftiLoader:
             }
             n_template_alignments += 1
 
+        # Raw-data backgrounds (statmap-as-template) are the case most at risk:
+        # unlike the bundled MNI template, an uploaded statmap may be in native
+        # space. Collect any that aren't in a standard frame and warn once.
+        native_backgrounds = []
         for file_nr, stm in self.brain_nav.statmap_templates.items():
             template_image = stm.get('image')
             if template_image is None:
                 continue
+            code, _ = self._spatial_space(template_image)
+            if code < 2:  # 0 unknown / 1 scanner = not normalized
+                native_backgrounds.append(stm.get('filename', f'statmap {file_nr}'))
             aligned = self._align_atlas_to_template(atlas_img, template_image)
             self.brain_nav.userAtlasInfo[('data_as_template', file_nr)] = {
                 'filename': os.path.basename(file_path),
@@ -336,12 +358,74 @@ class NiftiLoader:
             }
             n_template_alignments += 1
 
+        # Analysis-grid alignment. The two loops above prepare atlases for
+        # display (one per background). ROI TDP itself should be computed on
+        # the raw data grid — matching the cluster path's philosophy of "run
+        # analysis on the statmap, coregister for display, not the other way
+        # round." For each loaded statmap, resample the atlas onto its
+        # canonical grid then transpose to match the analysis grid that
+        # indexp_linear indexes into (Utilities.getPVals uses fileInfo['mask'].T
+        # → indices into fileInfo['data'].T shape). _mask_positions_for_roi
+        # then does a direct O(1) lookup instead of walking through the
+        # template's aligned_index_data.
+        n_analysis_alignments = 0
+        for file_nr, file_info in self.brain_nav.fileInfo.items():
+            data = file_info.get('data')
+            affine = file_info.get('affine')
+            if data is None or affine is None:
+                continue
+            statmap_ref = nib.Nifti1Image(
+                data, affine=affine, header=file_info.get('header')
+            )
+            aligned_img, _ = ImageProcessing.align_images(
+                statmap_ref, atlas_img, order=0
+            )
+            aligned_data = np.round(aligned_img.get_fdata()).astype(np.int32)
+            # Match the .T applied in Utilities.getPVals so a flat index built
+            # by np.ravel_multi_index(..., order='C') into indexp_linear lines
+            # up with atlas_grid.ravel(order='C').
+            file_info['atlas_on_analysis_grid'] = np.ascontiguousarray(
+                aligned_data.T
+            )
+            n_analysis_alignments += 1
+
         self.brain_nav.message_box.log_message(
             f"<span style='color: lightgreen;'>Atlas loaded: "
             f"{os.path.basename(file_path)} — {len(unique_labels)} ROIs, "
-            f"aligned to {n_template_alignments} template(s).</span>"
+            f"aligned to {n_template_alignments} background(s) for display "
+            f"and {n_analysis_alignments} statmap(s) for TDP computation."
+            f"</span>"
         )
+
+        if native_backgrounds:
+            names = ", ".join(native_backgrounds)
+            self.brain_nav.message_box.log_message(
+                f"<span style='color: orange;'>Warning: {names} appear(s) to be "
+                f"in native/scanner space, not MNI. Atlas alignment onto raw "
+                f"data assumes the data is spatially normalized — ROI overlays "
+                f"and TDPs for that background may be misplaced.</span>"
+            )
+
         return True
+
+    @staticmethod
+    def _spatial_space(img):
+        """
+        Return (code, label) for a NIfTI's spatial reference frame, preferring
+        the sform and falling back to the qform. NIfTI codes:
+        0 unknown, 1 scanner (native), 2 aligned, 3 Talairach, 4 MNI.
+        Used to flag when atlas alignment is being asked to relate images that
+        aren't in a shared standard space.
+        """
+        labels = {0: 'unknown', 1: 'scanner/native', 2: 'aligned',
+                  3: 'Talairach', 4: 'MNI'}
+        try:
+            code = int(img.header['sform_code'])
+            if code == 0:
+                code = int(img.header['qform_code'])
+        except Exception:
+            code = 0
+        return code, labels.get(code, f'code {code}')
 
     def _load_atlas_codebook(self, atlas_path, labels_set):
         """
@@ -355,9 +439,10 @@ class NiftiLoader:
         guessing whether their codebook file was picked up.
         """
         codebook = {}
-        sidecar = self._sidecar_path_for(atlas_path)
+        candidates = self._sidecar_path_candidates(atlas_path)
+        sidecar = next((c for c in candidates if os.path.exists(c)), None)
 
-        if os.path.exists(sidecar):
+        if sidecar is not None:
             try:
                 codebook = NiftiLoader.parse_atlas_codebook(sidecar)
                 matched = sum(1 for lbl in labels_set if int(lbl) in codebook)
@@ -373,11 +458,12 @@ class NiftiLoader:
                 )
                 codebook = {}
         else:
+            tried = ", ".join(os.path.basename(c) for c in candidates)
             self.brain_nav.message_box.log_message(
-                f"<span style='color: #888;'>No codebook sidecar found at "
-                f"{os.path.basename(sidecar)} — using auto-generated "
-                f"'ROI &lt;label&gt;' names. Use Upload Codebook to attach "
-                f"anatomical names.</span>"
+                f"<span style='color: #888;'>No codebook sidecar found "
+                f"(tried: {tried}) — using auto-generated 'ROI &lt;label&gt;' "
+                f"names. Use Upload Codebook to attach anatomical names."
+                f"</span>"
             )
 
         # Fill any missing labels with a default ROI <n> name.
@@ -436,18 +522,32 @@ class NiftiLoader:
         return True
 
     @staticmethod
-    def _sidecar_path_for(atlas_path):
+    def _sidecar_path_candidates(atlas_path):
         """
-        Resolve `foo.nii` -> `foo.txt` and `foo.nii.gz` -> `foo.txt`.
-        os.path.splitext only strips the last extension, so .nii.gz needs
-        an explicit second peel.
+        Return the sidecar codebook filenames to try, in order of preference.
+
+        Historically the bundled AAL2 pair uses the `_CodeBook.txt` suffix
+        (`AAL2.nii` + `AAL2_CodeBook.txt`), which the plain `<basename>.txt`
+        rule alone silently misses — the loader then falls through to
+        auto-generated `ROI <label>` names. Trying a small set of common
+        conventions catches both bundled and user-created pairs. Order is
+        preference: the exact-basename match wins over suffixed variants
+        when both happen to exist.
+
+        Also handles `.nii.gz`: `os.path.splitext` only strips the `.gz` on
+        the first call, so we peel `.nii.gz` explicitly.
         """
         base = atlas_path
         if base.endswith('.nii.gz'):
             base = base[:-len('.nii.gz')]
         elif base.endswith('.nii'):
             base = base[:-len('.nii')]
-        return base + '.txt'
+        return [
+            base + '.txt',
+            base + '_CodeBook.txt',
+            base + '_codebook.txt',
+            base + '_labels.txt',
+        ]
 
     def _build_atlas_lut(self, unique_labels):
         """

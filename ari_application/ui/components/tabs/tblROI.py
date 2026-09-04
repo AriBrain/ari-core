@@ -16,6 +16,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt
 
+import pandas as pd
+
 from ari_application.resources.styles import Styles
 
 
@@ -26,8 +28,13 @@ _ROI_ANALYSIS_EXPLAINER = (
     "ROI Analysis assigns a TDP (True Discovery Proportion) value to each "
     "region in a user-supplied anatomical atlas, using the ARI framework "
     "instead of forming data-driven clusters. Upload an atlas NIfTI (integer "
-    "labels), optionally attach a codebook `.txt` mapping labels to names, "
-    "then Run to compute per-ROI TDPs."
+    "labels), optionally attach a codebook <code>.txt</code> mapping labels "
+    "to names, then Run to compute per-ROI TDPs."
+    "<br><br>"
+    "<b>Important:</b> the atlas and the statistical map must be in the "
+    "<b>same standard space</b> (e.g. MNI, or Talairach). Alignment is "
+    "header-based (no image registration is performed), so native/scanner-"
+    "space data will produce misplaced ROIs and unreliable TDPs."
 )
 
 
@@ -61,8 +68,11 @@ class TblROI(QWidget):
 
         explainer = QTextEdit()
         explainer.setReadOnly(True)
-        explainer.setText(_ROI_ANALYSIS_EXPLAINER)
-        explainer.setFixedHeight(60)
+        # HTML so the warning can be bolded inline.
+        explainer.setHtml(_ROI_ANALYSIS_EXPLAINER)
+        # A bit taller than the old 60px so the appended standard-space
+        # warning isn't clipped.
+        explainer.setFixedHeight(120)
 
         outer.addWidget(title)
         outer.addWidget(explainer)
@@ -220,6 +230,31 @@ class TblROI(QWidget):
         self.table_widget.clearSpans()
         self.table_widget.setRowCount(0)
         self.table_widget.blockSignals(False)
+
+    def populate_from_codebook(self, codebook):
+        """
+        Render the codebook (label -> name mapping) as an empty-analysis
+        table: one row per ROI with the name and label filled in, the
+        numeric columns showing em-dashes. Called after atlas / codebook
+        upload so the user can preview which regions will be analysed
+        before clicking Run. compute_roi_tdps overwrites these rows via
+        update_table with the real TDPs + centroids once the analysis
+        completes.
+        """
+        if not codebook:
+            return
+        rows = [
+            {
+                'ROI': name,
+                'Label': int(label),
+                'Size (vox)': '—',
+                'TDP': '—',
+                'Centroid (vox)': '—',
+                'Centroid (MNI)': '—',
+            }
+            for label, name in sorted(codebook.items(), key=lambda kv: int(kv[0]))
+        ]
+        self.update_table(pd.DataFrame(rows))
 
     def select_roi_row(self, roi_label):
         """
