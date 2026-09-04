@@ -2,11 +2,12 @@
 from PyQt5.QtGui import QFont
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTabWidget, QComboBox, QTextEdit, 
-    QSizePolicy, QSpacerItem, QTableWidget, QHeaderView, QGraphicsDropShadowEffect
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTabWidget, QComboBox, QTextEdit,
+    QSizePolicy, QSpacerItem, QTableWidget, QHeaderView, QGraphicsDropShadowEffect,
 )
 from PyQt5.QtGui import QFont, QColor
 from PyQt5.QtCore import Qt, pyqtSignal
+
 
 class InitiateTabs(QWidget):
     """
@@ -74,9 +75,13 @@ class InitiateTabs(QWidget):
 
 
         # **Dropdown for thresholding options**
+        # "Anatomical Atlas" used to live here as a scaffolding shortcut —
+        # it's been moved to its own ROI Analysis tab since it isn't a
+        # thresholding method (it assigns TDPs to pre-defined regions
+        # rather than forming clusters from a threshold).
         self.thresholding_dropdown = QComboBox()
         self.thresholding_dropdown.addItems([
-            "TDP-based", "Z-score based", "Anatomical Atlas", "User-specified cluster map"
+            "TDP-based", "Z-score based", "User-specified cluster map"
         ])
         # self.thresholding_dropdown.currentIndexChanged.connect(self.update_threshold_option)
         self.thresholding_dropdown.currentIndexChanged.connect(self.thresholding_dropdown_clicked.emit)
@@ -90,12 +95,10 @@ class InitiateTabs(QWidget):
             "TDP-based": ("Applying a TDP threshold is equivalent to using different test statistic thresholds for cluster generation. "
                         "Each created cluster has the TDP not below the given threshold. "
                         "Note that you can adjust thresholds afterward. Navigate to the cluster tab for cluster analysis."),
-            
+
             "Z-score based": ("Applying a test statistic threshold leads to conventional supra-threshold clusters. "
                             "Use the z-score option if you want to replicate results from a standard analysis. "
                             "Note that you can adjust thresholds afterward. Navigate to the cluster tab for cluster analysis."),
-
-            "Anatomical Atlas": ("This method assigns a TDP value to each anatomical region instead of using thresholding to define clusters. "),
 
             "User-specified cluster map": ("Instead of defining clusters through thresholding, this method assigns a TDP value to predefined"
                                            "regions in your custom cluster map." )
@@ -106,8 +109,13 @@ class InitiateTabs(QWidget):
         
         self.advisory_text.setFixedHeight(60)
 
-        # Initiate the whole brain tdp slider. 
+        # Initiate the whole brain tdp slider.
         self.threshold_container1 = self.brain_nav.WBTing.whole_brain_tdp_slider() # -> self.threshold_container1
+
+        # The atlas operating panel (Upload Atlas / Upload Codebook / Run)
+        # used to sit here, gated on the "Anatomical Atlas" dropdown option.
+        # It now lives on the ROI Analysis tab (TblROI.init_table) since
+        # ROI-based TDP isn't a thresholding method.
 
         # # **Atlas selection dropdown or file selection**
         # self.atlas_dropdown = QComboBox()
@@ -191,7 +199,13 @@ class InitiateTabs(QWidget):
         cluster_tab.setLayout(cluster_layout)
 
         # -----------------------
-        # Tab 3: Save & Export Project
+        # Tab 3: ROI Analysis (user-uploaded atlas) — self-contained widget
+        # built by TblROI; empty placeholder until compute_roi_tdps runs.
+        # -----------------------
+        self.roi_analysis_tab = self.brain_nav.tblROI.init_table()
+
+        # -----------------------
+        # Tab 4: Save & Export Project
         # -----------------------
 
         self.save_export_tab = self.brain_nav.save_export.init_save_and_export_tab()
@@ -201,10 +215,40 @@ class InitiateTabs(QWidget):
         # -----------------------
         self.tab_widget.addTab(whole_brain_tab, "Whole Brain TDP")
         self.tab_widget.addTab(cluster_tab, "Cluster Analysis")
+        self.tab_widget.addTab(self.roi_analysis_tab, "ROI Analysis")
         self.tab_widget.addTab(self.save_export_tab, "Save/Load and Export")
 
-        # Set the height of the entire container (including tabs)
-        half_height = self.brain_nav.height() // 2
+        # Grey out the cluster work station while the ROI Analysis tab is
+        # active: cluster-specific TDP editing is meaningless in the ROI
+        # workflow, and leaving the slider live would otherwise silently
+        # mutate cluster state (and drop the cluster from the 3D viewer)
+        # while the user is looking at ROIs.
+        self.roi_analysis_tab_index = self.tab_widget.indexOf(self.roi_analysis_tab)
+
+        # Tab groups for view-context save/restore: the two cluster-analysis
+        # tabs share one visual context, the ROI tab has its own, and
+        # Save/Load is neutral (switching to it changes nothing). Crossing
+        # between the cluster and roi groups snapshots the outgoing view
+        # (selection + overlay mode) and re-establishes the incoming one, so
+        # users can bounce between analyses without losing where they were.
+        self._tab_group_by_index = {
+            self.tab_widget.indexOf(whole_brain_tab): 'cluster',
+            self.tab_widget.indexOf(cluster_tab): 'cluster',
+            self.roi_analysis_tab_index: 'roi',
+            self.tab_widget.indexOf(self.save_export_tab): None,
+        }
+        self._active_context_group = 'cluster'
+
+        self.tab_widget.currentChanged.connect(self._on_tab_changed)
+
+        # Set the height of the entire container (including tabs).
+        # Based on the screen, not the window: this runs during __init__
+        # before the window is shown, when self.brain_nav.height() still
+        # reports the pre-show Qt default (~480) rather than the maximized
+        # size — which shrank the tab area to ~240px and threw off the
+        # right column's layout.
+        from PyQt5.QtWidgets import QDesktopWidget
+        half_height = QDesktopWidget().availableGeometry().height() // 2
         self.table_container.setFixedHeight(half_height)
 
         # Add the tab widget to the main layout
@@ -215,6 +259,66 @@ class InitiateTabs(QWidget):
 
         return self.table_container
 
+
+    # Atlas click handlers used to live here; they now live on TblROI
+    # (which owns the buttons).
+
+    def _on_tab_changed(self, index):
+        """
+        On the ROI Analysis tab the cluster work station is meaningless
+        (cluster-level TDP editing doesn't apply), so we hide it entirely and
+        hand its vertical space to the tab area — the ROI table gets the extra
+        rows. Any other tab restores the original layout. set_active still
+        runs underneath so the slider/buttons stay functionally disabled
+        while in ROI mode.
+        """
+        cluster_ws = getattr(self.brain_nav, 'cluster_ws', None)
+        if cluster_ws is None or not hasattr(cluster_ws, 'set_active'):
+            return
+
+        on_roi_tab = (index == self.roi_analysis_tab_index)
+        cluster_ws.set_active(not on_roi_tab)
+
+        ws_container = getattr(cluster_ws, 'work_station_container', None)
+        if ws_container is None:
+            return
+
+        if on_roi_tab and ws_container.isVisible():
+            # Remember the geometry we're about to change so restore is exact.
+            self._table_container_base_height = self.table_container.height()
+            # Actual rendered height; fall back to the hint if the widget
+            # hasn't been laid out yet (e.g. tab switched before first show).
+            ws_height = ws_container.height() or ws_container.sizeHint().height()
+            # Reclaim the right column's inter-widget spacing too. Read it
+            # from the live layout (right_container's QVBoxLayout) rather
+            # than hardcoding, with 10 as the historical fallback.
+            parent = self.table_container.parentWidget()
+            spacing = parent.layout().spacing() if parent and parent.layout() else 10
+            ws_container.setVisible(False)
+            self.table_container.setFixedHeight(
+                self._table_container_base_height + ws_height + spacing
+            )
+        elif not on_roi_tab and not ws_container.isVisible():
+            base = getattr(self, '_table_container_base_height', None)
+            if base is not None:
+                self.table_container.setFixedHeight(base)
+            ws_container.setVisible(True)
+
+        # --- View-context save/restore across the cluster <-> roi groups ---
+        # Neutral tabs (Save/Load) don't change the active context, so
+        # bouncing through them and back to the same group leaves the view
+        # untouched. Only a genuine group crossing snapshots the outgoing
+        # context and re-establishes the incoming one.
+        new_group = self._tab_group_by_index.get(index)
+        metrics = getattr(self.brain_nav, 'metrics', None)
+        if (
+            metrics is not None
+            and new_group is not None
+            and new_group != self._active_context_group
+        ):
+            metrics.save_view_context(self._active_context_group)
+            metrics.restore_view_context(new_group)
+            self._active_context_group = new_group
 
     def init_metrics_container(self):
         # Create the metrics layout

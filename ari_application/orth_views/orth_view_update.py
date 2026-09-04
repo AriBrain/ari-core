@@ -7,11 +7,11 @@ class OrthViewUpdate:
     def __init__(self, BrainNaV):
         """
 
-        The OrthViewUpdate class handles the updating of orthogonal views (axial, sagittal, coronal) 
-        for the BrainNav application. It includes methods to get and set the display ranges of these views, 
+        The OrthViewUpdate class handles the updating of orthogonal views (axial, sagittal, coronal)
+        for the BrainNav application. It includes methods to get and set the display ranges of these views,
         update the displayed image slices, and manage the crosshair positions within each view. This class
-        ensures that the views are synchronized and correctly display the current state of the brain 
-        image data. 
+        ensures that the views are synchronized and correctly display the current state of the brain
+        image data.
         """
 
         # Initialize the OrthViewUpdate with a reference to the BrainNav instance.
@@ -21,6 +21,11 @@ class OrthViewUpdate:
         self.axial_overlay_item = None
         self.sagittal_overlay_item = None
         self.coronal_overlay_item = None
+        # Extra ImageItems for the selected-ROI border (heatmap/categorical
+        # selection highlight replaces the old dim-others approach).
+        self.axial_contour_item = None
+        self.sagittal_contour_item = None
+        self.coronal_contour_item = None
 
     def get_ranges(self):
         """
@@ -135,11 +140,28 @@ class OrthViewUpdate:
         # Use dict.get to safely access the nested structure
         # statmap_entry = self.brain_nav.statmaps.get(self.brain_nav.file_nr, {})
         statmap_entry = self.brain_nav.aligned_statMapInfo.get((self.brain_nav.file_nr, self.brain_nav.file_nr_template), {})
-        
-        if 'overlay_data' in statmap_entry:
+
+        # Three overlay modes — cluster (the original ARI overlay), atlas
+        # (verification view for the user-uploaded atlas), and roi (post-
+        # analysis selection view, lands in step 5). See
+        # docs/ATLAS_TDP_PLAN.md §4.3.
+        overlay_mode = self.brain_nav.ui_params.get('overlay_mode', 'cluster')
+
+        if overlay_mode in ('atlas', 'roi') and self._has_user_atlas_for_active_view():
+            self.add_atlas_overlay(
+                highlight_label=self.brain_nav.ui_params.get('selected_roi_label')
+                if overlay_mode == 'roi' else None
+            )
+        elif 'overlay_data' in statmap_entry:
+            # Clear any leftover atlas contour items before drawing the
+            # cluster overlay — add_overlay_with_transparency doesn't know
+            # about them.
+            self._clear_atlas_contours()
             self.add_overlay_with_transparency(selected_cluster_id)
             # self.update_crosshairs()
         else:
+            # Full cleanup — atlas overlay + contour + cluster overlay items.
+            self._clear_atlas_contours()
             # Remove existing overlay items if they exist
             if self.axial_overlay_item:
                 self.brain_nav.axial_view.removeItem(self.axial_overlay_item)
@@ -379,6 +401,157 @@ class OrthViewUpdate:
         self.brain_nav.sagittal_view.addItem(self.sagittal_overlay_item)
         self.brain_nav.coronal_view.addItem(self.coronal_overlay_item)
             
+    def _active_atlas_key(self):
+        """
+        Returns the userAtlasInfo key for the currently selected template,
+        matching the keying convention used by atlasInfo (int file_nr_template
+        for normal templates, ('data_as_template', file_nr) for the
+        statmap-as-template case). Returns None when the data-as-template
+        index has been set but the user is viewing it.
+        """
+        file_nr = self.brain_nav.file_nr
+        file_nr_template = self.brain_nav.file_nr_template
+        data_bg_index = getattr(self.brain_nav, 'data_bg_index', None)
+        if data_bg_index is not None and file_nr_template == data_bg_index:
+            return ('data_as_template', file_nr)
+        return file_nr_template
+
+    def _has_user_atlas_for_active_view(self):
+        key = self._active_atlas_key()
+        return key in self.brain_nav.userAtlasInfo
+
+    def add_atlas_overlay(self, highlight_label=None):
+        """
+        Render the user-uploaded atlas as a coloured overlay over the current
+        template. LUT choice depends on ui_params['atlas_colour_mode']:
+        'categorical' uses the fixed HSV palette, 'heatmap' uses the viridis
+        LUT built from per-ROI TDPs by Metrics._build_atlas_tdp_lut.
+
+        When highlight_label is set (the 'roi' overlay mode), a bright cyan
+        1-voxel contour is drawn on top of the selected ROI in each slice —
+        replacing the old dim-others approach so heatmap comparisons across
+        ROIs remain readable while the selection stays identifiable.
+        """
+        # Drop any previous overlay + contour items so we don't stack.
+        self._remove_atlas_overlay_items()
+
+        atlas_entry = self.brain_nav.userAtlasInfo[self._active_atlas_key()]
+        atlas_vol = atlas_entry['data']
+
+        # Pick the LUT the current colour mode calls for. Fall back to the
+        # categorical LUT if heatmap was requested but tdp_lut hasn't been
+        # built yet (analysis not run).
+        mode = self.brain_nav.ui_params.get('atlas_colour_mode', 'categorical')
+        if mode == 'heatmap' and atlas_entry.get('tdp_lut') is not None:
+            lut = atlas_entry['tdp_lut'].copy()
+        else:
+            lut = atlas_entry['lut'].copy()
+
+        # Apply the live opacity from the orthview alpha slider. The LUT
+        # bakes in the alpha at load time, so without this the atlas overlay
+        # ignores later slider moves. Only ROI rows (alpha > 0) are touched,
+        # keeping the background row transparent. No dim-highlight rewrite:
+        # selection is signalled by the contour overlay instead.
+        roi_rows = lut[:, 3] > 0
+        slider_alpha = int(self.brain_nav.alpha * 255)
+        lut[roi_rows, 3] = slider_alpha
+
+        template_data = self.brain_nav.templates[self.brain_nav.file_nr_template]['data']
+
+        if template_data.flags['C_CONTIGUOUS']:
+            axial_slice = atlas_vol[:, :, self.brain_nav.axial_slice].astype(int)
+            sagittal_slice = atlas_vol[self.brain_nav.sagittal_slice, :, :].astype(int)
+            coronal_slice = atlas_vol[:, self.brain_nav.coronal_slice, :].astype(int)
+        else:
+            axial_slice = atlas_vol[self.brain_nav.axial_slice, :, :].astype(int)
+            sagittal_slice = atlas_vol[:, :, self.brain_nav.sagittal_slice].astype(int)
+            coronal_slice = atlas_vol[:, self.brain_nav.coronal_slice, :].astype(int)
+
+        # Clamp to LUT range — defensive, in case the atlas has a stray label
+        # outside what _build_atlas_lut sized for.
+        max_idx = lut.shape[0] - 1
+        axial_slice = np.clip(axial_slice, 0, max_idx)
+        sagittal_slice = np.clip(sagittal_slice, 0, max_idx)
+        coronal_slice = np.clip(coronal_slice, 0, max_idx)
+
+        self.axial_overlay_item = pg.ImageItem(np.take(lut, axial_slice, axis=0))
+        self.sagittal_overlay_item = pg.ImageItem(np.take(lut, sagittal_slice, axis=0))
+        self.coronal_overlay_item = pg.ImageItem(np.take(lut, coronal_slice, axis=0))
+
+        self.brain_nav.axial_view.addItem(self.axial_overlay_item)
+        self.brain_nav.sagittal_view.addItem(self.sagittal_overlay_item)
+        self.brain_nav.coronal_view.addItem(self.coronal_overlay_item)
+
+        # Contour highlight for the selected ROI, if any.
+        if highlight_label is not None and 0 < highlight_label <= max_idx:
+            self._add_atlas_contour(
+                axial_slice, sagittal_slice, coronal_slice, int(highlight_label),
+            )
+
+    def _clear_atlas_contours(self):
+        """Drop the three per-view contour ImageItems (no-op if absent)."""
+        for attr, view_attr in [
+            ('axial_contour_item', 'axial_view'),
+            ('sagittal_contour_item', 'sagittal_view'),
+            ('coronal_contour_item', 'coronal_view'),
+        ]:
+            item = getattr(self, attr)
+            if item is not None:
+                getattr(self.brain_nav, view_attr).removeItem(item)
+                setattr(self, attr, None)
+
+    def _remove_atlas_overlay_items(self):
+        for attr, view_attr in [
+            ('axial_overlay_item', 'axial_view'),
+            ('sagittal_overlay_item', 'sagittal_view'),
+            ('coronal_overlay_item', 'coronal_view'),
+            ('axial_contour_item', 'axial_view'),
+            ('sagittal_contour_item', 'sagittal_view'),
+            ('coronal_contour_item', 'coronal_view'),
+        ]:
+            item = getattr(self, attr)
+            if item is not None:
+                getattr(self.brain_nav, view_attr).removeItem(item)
+                setattr(self, attr, None)
+
+    def _add_atlas_contour(self, axial_slice, sagittal_slice, coronal_slice, label):
+        """
+        Draw a 1-voxel bright-cyan border around the selected ROI on each
+        slice. Border = ROI - eroded(ROI), computed per slice with scipy.
+        Cheap (three small binary_erosion calls per slice update) and
+        legible over both categorical and heatmap-coloured overlays.
+        """
+        from scipy.ndimage import binary_erosion
+
+        # RGBA — bright cyan, fully opaque. Chosen to contrast with viridis
+        # (yellow-through-purple) and with the categorical HSV palette.
+        border_rgba = np.array([0, 255, 255, 255], dtype=np.uint8)
+
+        def contour_image(slice_2d):
+            roi = (slice_2d == label)
+            if not roi.any():
+                return None
+            border = roi & ~binary_erosion(roi)
+            if not border.any():
+                return None
+            img = np.zeros((*slice_2d.shape, 4), dtype=np.uint8)
+            img[border] = border_rgba
+            return img
+
+        axial_img = contour_image(axial_slice)
+        sagittal_img = contour_image(sagittal_slice)
+        coronal_img = contour_image(coronal_slice)
+
+        if axial_img is not None:
+            self.axial_contour_item = pg.ImageItem(axial_img)
+            self.brain_nav.axial_view.addItem(self.axial_contour_item)
+        if sagittal_img is not None:
+            self.sagittal_contour_item = pg.ImageItem(sagittal_img)
+            self.brain_nav.sagittal_view.addItem(self.sagittal_contour_item)
+        if coronal_img is not None:
+            self.coronal_contour_item = pg.ImageItem(coronal_img)
+            self.brain_nav.coronal_view.addItem(self.coronal_contour_item)
+
     def create_custom_lut(self, colormap='hot', alpha=0.5, selected_cluster_id=None, overlay=None):
         """
         Create a custom LUT (Lookup Table) with transparency for non-cluster voxels.
@@ -500,74 +673,88 @@ class OrthViewUpdate:
         # Define opposite directions
         opposites = {'L': 'R', 'R': 'L', 'A': 'P', 'P': 'A', 'I': 'S', 'S': 'I'}
 
-        # ---------------------------------------------
-        # Orientation Label Placement Explanation
-        # ---------------------------------------------
-        # We dynamically place anatomical orientation labels based on the image's sform affine,
-        # using `nibabel.aff2axcodes(sform)`. This gives the *positive direction* of each axis.
+        # ---------------------------------------------------------------
+        # Derive the DISPLAY volume's axis directions by composing the
+        # exact transform chain the rendered data went through, instead of
+        # assuming the canonical axes survive it (they don't — the y-flip
+        # in rotate_volume previously mirrored A/P on the sagittal view's
+        # horizontal axis while the axial view's two inversions happened
+        # to cancel).
         #
-        # For example: axcodes = ('R', 'A', 'S') means:
-        #   - axis 0 increases toward Right (R), so the opposite (Left, L) is on the left side.
-        #   - axis 1 increases toward Anterior (A), so Posterior (P) is on the bottom.
-        #   - axis 2 increases toward Superior (S), used in sagittal/coronal views.
+        # Chain (see transpose_image / rotate_volume in image_processing):
+        #   canonical (axcodes, e.g. R, A, S)
+        #   1. .T                    -> axes reversed:            (2, 1, 0)
+        #   2. rot90(k=1, axes=(2,0)) = flip(axis 0) + swap 0<->2
+        #   3. flip(axis 1)
         #
-        # For each 2D view, we assign label text to image edges:
-        #   - The label at the minimum side of an axis shows the *opposite* direction.
-        #   - The label at the maximum side shows the actual axcode direction.
-        #
-        # Example for axial view (X = L-R, Y = A-P):
-        #   - Left edge (min X): opposite of axcodes[0] → 'L'
-        #   - Right edge (max X): axcodes[0] → 'R'
-        #   - Top edge (min Y): axcodes[1] → 'A'
-        #   - Bottom edge (max Y): opposite of axcodes[1] → 'P'
+        # Tracking (direction, sign) triples through those steps yields the
+        # per-axis positive direction of the array that setImage receives.
+        # ---------------------------------------------------------------
+        def _display_axcodes(canonical):
+            # (code, flipped?) per axis, starting canonical: axis i -> code i
+            axes = [(canonical[0], False), (canonical[1], False), (canonical[2], False)]
+            axes = axes[::-1]                       # 1. transpose (.T)
+            axes[0] = (axes[0][0], not axes[0][1])  # 2a. rot90: flip axis 0
+            axes[0], axes[2] = axes[2], axes[0]     # 2b. rot90: swap axes 0<->2
+            axes[1] = (axes[1][0], not axes[1][1])  # 3. y-flip (rotate_volume)
+            # Resolve flips into the opposite letter.
+            return tuple(opposites[c] if flipped else c for c, flipped in axes)
 
-        # Axial: X = axis 0 (L-R), Y = axis 1 (A-P)
+        # Positive direction of each DISPLAY axis, e.g. ('R', 'P', 'I') for
+        # RAS input. Rendering: pyqtgraph col-major (array axis 0 -> screen
+        # x, axis 1 -> screen y) with ImageView's default invertY, so screen
+        # y increases DOWNWARD. Hence for any displayed 2D slice:
+        #   right edge  = positive direction of its screen-x axis
+        #   bottom edge = positive direction of its screen-y axis
+        disp = _display_axcodes(axcodes)
+
+        # Axial slice [:, :, z]: screen-x = display axis 0, screen-y = axis 1
         shape = self.brain_nav.axial_view.image.shape
         x_len, y_len = shape[0], shape[1]
         vbox = self.brain_nav.axial_view.getView()
-        label = create_label(opposites[axcodes[0]], (-offset, y_len / 2))         # Left
+        label = create_label(opposites[disp[0]], (-offset, y_len / 2))         # left edge
         vbox.addItem(label)
         self.orientation_labels['axial'].append(label)
-        label = create_label(axcodes[0], (x_len + offset, y_len / 2))             # Right
+        label = create_label(disp[0], (x_len + offset, y_len / 2))             # right edge
         vbox.addItem(label)
         self.orientation_labels['axial'].append(label)
-        label = create_label(axcodes[1], (x_len / 2, -offset))                    # Anterior (shown at top, but really "forward")
+        label = create_label(opposites[disp[1]], (x_len / 2, -offset))         # top edge
         vbox.addItem(label)
         self.orientation_labels['axial'].append(label)
-        label = create_label(opposites[axcodes[1]], (x_len / 2, y_len + offset))  # Posterior
+        label = create_label(disp[1], (x_len / 2, y_len + offset))             # bottom edge
         vbox.addItem(label)
         self.orientation_labels['axial'].append(label)
 
-        # Sagittal: X = axis 1 (A-P), Y = axis 2 (I-S)
+        # Sagittal slice [x, :, :]: screen-x = display axis 1, screen-y = axis 2
         shape = self.brain_nav.sagittal_view.image.shape
         x_len, y_len = shape[0], shape[1]
         vbox = self.brain_nav.sagittal_view.getView()
-        label = create_label(opposites[axcodes[1]], (-offset, y_len / 2))         # Posterior
+        label = create_label(opposites[disp[1]], (-offset, y_len / 2))         # left edge
         vbox.addItem(label)
         self.orientation_labels['sagittal'].append(label)
-        label = create_label(axcodes[1], (x_len + offset, y_len / 2))             # Anterior
+        label = create_label(disp[1], (x_len + offset, y_len / 2))             # right edge
         vbox.addItem(label)
         self.orientation_labels['sagittal'].append(label)
-        label = create_label(axcodes[2], (x_len / 2, -offset))                    # Superior (shown at top)
+        label = create_label(opposites[disp[2]], (x_len / 2, -offset))         # top edge
         vbox.addItem(label)
         self.orientation_labels['sagittal'].append(label)
-        label = create_label(opposites[axcodes[2]], (x_len / 2, y_len + offset))  # Inferior
+        label = create_label(disp[2], (x_len / 2, y_len + offset))             # bottom edge
         vbox.addItem(label)
         self.orientation_labels['sagittal'].append(label)
 
-        # Coronal: X = axis 0 (L-R), Y = axis 2 (I-S)
+        # Coronal slice [:, y, :]: screen-x = display axis 0, screen-y = axis 2
         shape = self.brain_nav.coronal_view.image.shape
         x_len, y_len = shape[0], shape[1]
         vbox = self.brain_nav.coronal_view.getView()
-        label = create_label(opposites[axcodes[0]], (-offset, y_len / 2))         # Left
+        label = create_label(opposites[disp[0]], (-offset, y_len / 2))         # left edge
         vbox.addItem(label)
         self.orientation_labels['coronal'].append(label)
-        label = create_label(axcodes[0], (x_len + offset, y_len / 2))             # Right
+        label = create_label(disp[0], (x_len + offset, y_len / 2))             # right edge
         vbox.addItem(label)
         self.orientation_labels['coronal'].append(label)
-        label = create_label(axcodes[2], (x_len / 2, -offset))                    # Superior
+        label = create_label(opposites[disp[2]], (x_len / 2, -offset))         # top edge
         vbox.addItem(label)
         self.orientation_labels['coronal'].append(label)
-        label = create_label(opposites[axcodes[2]], (x_len / 2, y_len + offset))  # Inferior
+        label = create_label(disp[2], (x_len / 2, y_len + offset))             # bottom edge
         vbox.addItem(label)
         self.orientation_labels['coronal'].append(label)

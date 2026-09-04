@@ -92,7 +92,6 @@ class UploadFiles:
                 self.brain_nav.left_side_bar.add_statmap_to_list(file_path)
                 self.brain_nav.tblARI.clear_table()
 
-                
                 # New statmap is loaded, so we need to run ARI
                 self.brain_nav.ARI.runARI()
                 
@@ -126,6 +125,100 @@ class UploadFiles:
                     f"Failed to upload template: {e}", exc_info=True
                 )
 
+    def upload_codebook_dialog(self):
+        """
+        Pick a codebook `.txt` in AAL2 format and swap in the parsed names.
+        Only meaningful once a user atlas is loaded; the atlas section's
+        Upload Codebook button is gated on that. If a TblROI is already
+        populated, we re-render it in place with the new names — TDPs and
+        centroids are unaffected by a name change so no recompute needed.
+        """
+        options = QFileDialog.Options()
+        file_path, _ = QFileDialog.getOpenFileName(
+            self.brain_nav, "Upload Codebook File", "",
+            "Text Files (*.txt);;All Files (*)",
+            options=options,
+        )
+        if not file_path:
+            return
+
+        self.logger.info(f"Codebook file selected: {file_path}")
+        try:
+            ok = self.brain_nav.nifti_loader.load_user_codebook(file_path)
+        except Exception as e:
+            # ErrorHandler was removed on main (983bde7) — the leveled
+            # MessageLogger owns error reporting now.
+            self.brain_nav.message_box.error(
+                f"Failed to load codebook: {e}", exc_info=True
+            )
+            return
+
+        if not ok:
+            return
+
+        # Refresh the ROI table with the new names.
+        file_nr = self.brain_nav.file_nr
+        atlas_key = self.brain_nav.metrics._resolve_atlas_key(
+            file_nr, self.brain_nav.file_nr_template,
+        )
+        new_codebook = self.brain_nav.userAtlasInfo[atlas_key]['codebook']
+        tbl = self.brain_nav.fileInfo.get(file_nr, {}).get('tblROI_df')
+        if tbl is not None and not tbl.empty:
+            # An analysis has been run; keep TDPs and centroids, just rewrite
+            # the ROI-name column via Label -> new name.
+            tbl['ROI'] = tbl['Label'].map(
+                lambda lbl: new_codebook.get(int(lbl), f"ROI {int(lbl)}")
+            )
+            self.brain_nav.tblROI.update_table(tbl)
+        else:
+            # No analysis yet — refresh the codebook-only preview so the
+            # renamed regions show up in the table right away.
+            self.brain_nav.tblROI.populate_from_codebook(new_codebook)
+
     def upload_atlas_dialog(self):
-        # here upload user atlas routine needs to be defined. 
-        pass
+        """
+        Pick a user atlas NIfTI, hand off to NiftiLoader.load_user_atlas, and
+        on success flip the orthoviews into 'atlas' overlay mode so the user
+        can visually verify alignment before running ROI TDPs.
+        """
+        options = QFileDialog.Options()
+        file_path, _ = QFileDialog.getOpenFileName(
+            self.brain_nav, "Upload Atlas File", "",
+            "NIfTI Files (*.nii *.nii.gz);;All Files (*)",
+            options=options,
+        )
+        if not file_path:
+            return
+
+        self.logger.info(f"Atlas file selected: {file_path}")
+        try:
+            ok = self.brain_nav.nifti_loader.load_user_atlas(file_path)
+        except Exception as e:
+            # ErrorHandler was removed on main (983bde7) — the leveled
+            # MessageLogger owns error reporting now.
+            self.brain_nav.message_box.error(
+                f"Failed to load atlas: {e}", exc_info=True
+            )
+            return
+
+        if not ok:
+            return
+
+        # Switch the overlay layer to the atlas for verification. Enable the
+        # Run + Upload Codebook buttons (they live on TblROI, which owns
+        # the whole atlas operating panel) and update the ROI-count readout.
+        self.brain_nav.ui_params['overlay_mode'] = 'atlas'
+        self.brain_nav.tblROI.atlas_run_button.setEnabled(True)
+        self.brain_nav.tblROI.atlas_codebook_button.setEnabled(True)
+
+        # ROI count = number of distinct labels in the codebook (auto-filled
+        # to include every non-zero label in the atlas, whether or not the
+        # sidecar named it).
+        sample_entry = next(iter(self.brain_nav.userAtlasInfo.values()), None)
+        if sample_entry is not None:
+            self.brain_nav.tblROI.set_roi_count(len(sample_entry['codebook']))
+            # Show the ROI list right away with placeholder TDP/centroid
+            # columns; compute_roi_tdps overwrites these when Run is clicked.
+            self.brain_nav.tblROI.populate_from_codebook(sample_entry['codebook'])
+
+        self.brain_nav.orth_view_update.update_slices()

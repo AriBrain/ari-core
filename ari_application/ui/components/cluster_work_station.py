@@ -2,9 +2,10 @@
 # === Required Imports ===
 from PyQt5.QtWidgets import (
     QWidget, QGroupBox, QTableWidget, QTableWidgetItem, QPushButton,
-    QSlider, QLineEdit, QVBoxLayout, QHBoxLayout, QHeaderView
+    QSlider, QLineEdit, QVBoxLayout, QHBoxLayout, QHeaderView, QLabel,
+    QGraphicsOpacityEffect
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QEvent
 from PyQt5.QtGui import QFont
 from ari_application.resources.styles import Styles
 
@@ -91,7 +92,63 @@ class ClusterWorkStation(QWidget):
         container_layout.addWidget(self.work_station_groupbox)
         self.work_station_container.setLayout(container_layout)
 
+        # Opacity effect used to visually dim the whole panel when inactive.
+        # setEnabled(False) alone doesn't grey the table / button container
+        # because both carry hardcoded background stylesheets that ignore the
+        # disabled palette; the opacity effect dims them regardless.
+        self._dim_effect = QGraphicsOpacityEffect(self.work_station_groupbox)
+        self._dim_effect.setOpacity(1.0)
+        self.work_station_groupbox.setGraphicsEffect(self._dim_effect)
+
+        # Inactive overlay — a floating banner drawn on top of the dimmed
+        # panel while on the ROI Analysis tab. It's a child of the container
+        # (not the groupbox), so the groupbox's opacity effect doesn't dim it,
+        # and it's kept out of the layout so it doesn't push the panel content
+        # down. Its geometry tracks the container via the event filter below.
+        self.inactive_overlay = QLabel(
+            "Inactive during ROI analysis", self.work_station_container
+        )
+        self.inactive_overlay.setAlignment(Qt.AlignCenter)
+        self.inactive_overlay.setStyleSheet(
+            "color: #d6a35c; font-style: italic; font-size: 13px; font-weight: bold;"
+            " background-color: rgba(9, 28, 19, 160); border-radius: 8px;"
+        )
+        self.inactive_overlay.setVisible(False)
+        self.work_station_container.installEventFilter(self)
+
         return self.work_station_container  # Return the container with the group box
+
+    def eventFilter(self, obj, event):
+        # Keep the floating inactive overlay sized to the work station
+        # container as it (and the window) resizes.
+        if obj is self.work_station_container and event.type() == QEvent.Resize:
+            self.inactive_overlay.setGeometry(self.work_station_container.rect())
+        return super().eventFilter(obj, event)
+
+    def set_active(self, active):
+        """
+        Enable/disable the entire cluster work station. Called on tab changes:
+        the ROI Analysis tab greys it out (cluster-level TDP editing doesn't
+        apply there), every other tab restores it.
+
+        Combines three effects so the state reads unambiguously:
+          - setEnabled(active) on the group box functionally disables the
+            table, slider and buttons (no stray slider drags mutating cluster
+            state while the user is in the ROI workflow)
+          - the opacity effect dims the panel past what the disabled palette
+            achieves on the hardcoded-styled children
+          - the banner spells out why it's inactive
+        """
+        self.work_station_groupbox.setEnabled(active)
+        self._dim_effect.setOpacity(1.0 if active else 0.35)
+        if active:
+            self.inactive_overlay.setVisible(False)
+        else:
+            # Size to the current container rect, show, and lift above the
+            # dimmed panel.
+            self.inactive_overlay.setGeometry(self.work_station_container.rect())
+            self.inactive_overlay.setVisible(True)
+            self.inactive_overlay.raise_()
 
     def init_cluster_edit_buttons(self):
         """

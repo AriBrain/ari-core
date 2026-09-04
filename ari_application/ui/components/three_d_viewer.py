@@ -3,7 +3,7 @@
 import numpy as np
 import pyvista as pv
 
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QEvent
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QPushButton
 # from PyQt5.QtWidgets import QSizePolicy  # Uncomment if you use it
 
@@ -44,8 +44,10 @@ class ThreeDViewer(QWidget):
 
         self.cluster_3d_view = QtInteractor(self)
         # self.cluster_3d_view.interactor.SetInteractorStyle(vtkInteractorStyleTrackballActor())
-        
-        self.cluster_3d_view.setFixedSize(400, 400)
+
+        # Scale with the window (was a hard 400x400) so the pane matches the
+        # orthviews' resizing behaviour.
+        self.cluster_3d_view.setMinimumSize(300, 300)
         self.cluster_3d_view.set_background('black')  # RGB for light grey
         self.cluster_3d_view.track_mouse_position()
         # self.cluster_3d_view.iren.interactor.AddObserver("MouseMoveEvent", self.custom_mouse_move)
@@ -54,7 +56,7 @@ class ThreeDViewer(QWidget):
         self.cluster_3d_view_container = QWidget()
         self.cluster_3d_view_container.setLayout(QVBoxLayout())
         self.cluster_3d_view_container.layout().setContentsMargins(0, 0, 0, 0)
-        self.cluster_3d_view_container.setFixedSize(400, 400)
+        self.cluster_3d_view_container.setMinimumSize(300, 300)
         self.cluster_3d_view_container.layout().addWidget(self.cluster_3d_view)
 
         # Apply stylesheet to the container, NOT the 3D view
@@ -116,24 +118,34 @@ class ThreeDViewer(QWidget):
         self.toggle_3dviewer_button.setParent(self.cluster_3d_view_container)
         self.pause_3dviewer_button.setParent(self.cluster_3d_view_container)
         
-        # Position buttons in the top-right corner with a margin of 5 pixels
-        # Position undock button
-        self.toggle_3dviewer_button.move(
-            self.cluster_3d_view_container.width() - self.toggle_3dviewer_button.width() - 5,
-            5
-        )
-        # Position pause button to the left of the undock button
-        self.pause_3dviewer_button.move(
-            self.cluster_3d_view_container.width() - self.toggle_3dviewer_button.width() - self.pause_3dviewer_button.width() - 10,
-            5
-        )
-        
+        # Position the floating buttons in the top-right corner. The container
+        # resizes with the window now, so an event filter re-runs this on
+        # every resize instead of a one-shot placement at init.
+        self._position_3d_buttons()
         self.toggle_3dviewer_button.raise_()
         self.pause_3dviewer_button.raise_()
-        
+        self.cluster_3d_view_container.installEventFilter(self)
+
         # Initialize 3D brain pause flag to False (3D rendering is active)
         if 'ui_params' in self.brain_nav.__dict__ and '3d_brain_pause' not in self.brain_nav.ui_params:
             self.brain_nav.ui_params['3d_brain_pause'] = False
+
+    def _position_3d_buttons(self):
+        """Snap the undock + pause buttons to the container's top-right corner."""
+        w = self.cluster_3d_view_container.width()
+        self.toggle_3dviewer_button.move(
+            w - self.toggle_3dviewer_button.width() - 5, 5
+        )
+        self.pause_3dviewer_button.move(
+            w - self.toggle_3dviewer_button.width() - self.pause_3dviewer_button.width() - 10, 5
+        )
+
+    def eventFilter(self, obj, event):
+        # Keep the floating buttons pinned to the top-right when the 3D
+        # container resizes (window resize, dock/undock).
+        if obj is self.cluster_3d_view_container and event.type() == QEvent.Resize:
+            self._position_3d_buttons()
+        return super().eventFilter(obj, event)
 
 
 
@@ -195,27 +207,58 @@ class ThreeDViewer(QWidget):
         lengths = (dims[0], dims[1], dims[2])
             
         if clusLabel:
-            # overlay_data = self.statmaps[self.file_nr]['overlay_data'].T
-            overlay_data = self.brain_nav.aligned_statMapInfo[(file_nr,file_nr_template)]['overlay_data'].T
+            # Source the label volume + LUT based on which overlay mode the
+            # user is currently in. 'roi' pulls from userAtlasInfo (populated
+            # by NiftiLoader.load_user_atlas); anything else keeps the
+            # existing cluster-map path.
+            overlay_mode = self.brain_nav.ui_params.get('overlay_mode', 'cluster')
 
-    
+            if overlay_mode == 'roi':
+                atlas_key = self.brain_nav.orth_view_update._active_atlas_key()
+                atlas_entry = self.brain_nav.userAtlasInfo.get(atlas_key)
+                if atlas_entry is None:
+                    # ROI mode requested but no atlas for the active view —
+                    # nothing meaningful to render.
+                    self.cluster_3d_view.update()
+                    return
+                overlay_data = atlas_entry['data'].T
+                # Pick the LUT the current colour mode calls for; fall back
+                # to categorical if heatmap is set but tdp_lut isn't built
+                # yet (no analysis run for this atlas). Atlas LUTs are
+                # already sized to max(label)+1 with row 0 transparent, so
+                # np.take(lut, clusLabel) works directly without the
+                # background-row insert the cluster path needs.
+                colour_mode = self.brain_nav.ui_params.get('atlas_colour_mode', 'categorical')
+                if colour_mode == 'heatmap' and atlas_entry.get('tdp_lut') is not None:
+                    lut = atlas_entry['tdp_lut'][:, :3]
+                else:
+                    lut = atlas_entry['lut'][:, :3]
+            else:
+                # overlay_data = self.statmaps[self.file_nr]['overlay_data'].T
+                overlay_data = self.brain_nav.aligned_statMapInfo[(file_nr, file_nr_template)]['overlay_data'].T
+
+                # ----------------
+                # Determine Cluster Color
+                # ----------------
+                lut = self.brain_nav.fileInfo[file_nr]['custom_lut']
+                lut = lut[:, :3]
+
+                # Define the background row
+                background = np.array([0, 0, 0], dtype=lut.dtype)
+
+                # Insert the background row at the first position (index 0)
+                lut = np.insert(lut, 0, background, axis=0)
+
             # transpose the data to match the PyVista format
             overlay_data = np.transpose(overlay_data, (2, 1, 0))
 
-            # ----------------
-            # Determine Cluster Color
-            # ----------------
-            lut = self.brain_nav.fileInfo[file_nr]['custom_lut']
-            lut = lut[:, :3]
-            
-            # Define the background row
-            background = np.array([0, 0, 0], dtype=lut.dtype)
-
-            # Insert the background row at the first position (index 0)
-            lut = np.insert(lut, 0, background, axis=0)
-            
-            # Map cluster ID to its RGBA color
-            clusColor = np.take(lut, clusLabel, axis=0)
+            # Map label to its RGB colour. Bounds-check first — an ROI label
+            # outside the LUT would raise; snap to 0 (transparent) in that
+            # case so a bad label doesn't blow up the render.
+            if 0 <= clusLabel < lut.shape[0]:
+                clusColor = np.take(lut, clusLabel, axis=0)
+            else:
+                clusColor = np.array([0, 0, 0], dtype=lut.dtype)
             
             # ----------------
             # Add Cluster Voxels
@@ -350,23 +393,25 @@ class ThreeDViewer(QWidget):
             self.cluster_3d_view_container.setWindowFlags(Qt.Widget)  # Restore normal widget behavior
             
             # Optionally restore fixed size for the docked state:
-            self.cluster_3d_view_container.setFixedSize(400, 400)
-            self.cluster_3d_view.setFixedSize(400, 400)
-            
+            # Undocking pinned the sizes to 800x800; on redock, release the
+            # fixed constraint so the pane scales with the window again
+            # (min 300, expanding — matching init_3d_cluster_viewer).
+            from PyQt5.QtWidgets import QWIDGETSIZE_MAX
+            for w in (self.cluster_3d_view_container, self.cluster_3d_view):
+                w.setMinimumSize(300, 300)
+                w.setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX)
+
             self.cluster_3d_view_container.show()
-            
+
             # Re-add the 3D viewer container back to the metrics container layout.
             self.brain_nav.cluster_viewer_container.addWidget(self.cluster_3d_view_container)
-            
+
             self.toggle_3dviewer_button.setText("⧉")  # Update button text or icon
             self.is_3dviewer_floating_3d = False
 
             # reset the buttons to the right corner of the redocked view
-            self.toggle_3dviewer_button.move(
-                self.cluster_3d_view_container.width() - self.toggle_3dviewer_button.width() - 5, 5)
-            self.pause_3dviewer_button.move(
-                self.cluster_3d_view_container.width() - self.toggle_3dviewer_button.width() - self.pause_3dviewer_button.width() - 10, 5)
-            
+            # (the resize event filter also handles subsequent resizes)
+            self._position_3d_buttons()
             self.toggle_3dviewer_button.raise_()
             self.pause_3dviewer_button.raise_()
 

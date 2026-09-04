@@ -237,7 +237,7 @@ class WBTing(QWidget):
 
         # Get currently selected threshold option from the dropdown
         selected_option     = self.brain_nav.initiate_tabs.thresholding_dropdown.currentText()
-        
+
         # Update the advisory text based on the selected option
         self.brain_nav.initiate_tabs.advisory_text.setText(self.brain_nav.initiate_tabs.advisory_messages.get(selected_option, ""))
 

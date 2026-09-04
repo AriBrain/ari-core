@@ -17,7 +17,9 @@ from PyQt5.QtCore import Qt
 # Project-Specific Imports
 import ari_application.cpp_extensions.cython_modules.ARICluster as ARI_C
 from ari_application.analyses.getClusters import get_clusters
+from ari_application.analyses.hommel import pyHommel
 from ari_application.models.image_processing import ImageProcessing
+from ari_application.resources.styles import Styles
 
 # To do: some functions, toward the end of this class can and should be moved to util.py as they are helper functions. 
 
@@ -542,6 +544,9 @@ class Metrics:
 
         progress = QProgressDialog("Computing tdp for z-based clusters...", "Cancel", 0, len(cluster_ids), self.brain_nav.main_window)
         progress.setWindowModality(Qt.WindowModal)
+        # Shared dialog styling: Cancel on its own row, not touching the bar.
+        progress.setStyleSheet(Styles.progress_dialog_styling)
+        progress.setMinimumWidth(360)
         progress.setValue(0)
         progress.show()
 
@@ -972,12 +977,18 @@ class Metrics:
 
     def follow_cluster_xyz(self, selected_row):
         """
-        Process the selected voxel coordinates, map them to UI space, 
+        Process the selected voxel coordinates, map them to UI space,
         update slice indices, and trigger updates to the orthogonal view and metrics.
 
         Parameters:
             selected_row (int): The row index of the currently selected voxel in the table.
         """
+        # If the last selection was an ROI, the overlay renderer is still in
+        # 'roi' mode. Any call to update_cluster_3d_view or update_slices in
+        # this method would then source from userAtlasInfo instead of the
+        # cluster overlay. Flip back to cluster mode before any render call.
+        self._reset_to_cluster_mode()
+
         file_nr = self.brain_nav.file_nr
         file_nr_template = self.brain_nav.file_nr_template
 
@@ -1916,4 +1927,480 @@ class Metrics:
         min_pval = min_row['p_value']
 
         return int(min_index), float(min_pval)
+
+    # ------------------------------------------------------------------
+    # ROI-level TDP — Phase 1 of docs/ATLAS_TDP_PLAN.md, step 4.
+    # Compute a TDP value per ROI in the user-uploaded atlas using the
+    # existing Hommel.discoveries machinery, with a coordinate-space
+    # translation (template space -> brain-mask positions) on the way in.
+    # ------------------------------------------------------------------
+
+    def _resolve_atlas_key(self, file_nr, file_nr_template):
+        """
+        userAtlasInfo is keyed the same way as the built-in atlasInfo: a
+        plain template index for normal templates, ('data_as_template',
+        file_nr) for the case where the statmap is being viewed as its
+        own template. Mirrors OrthViewUpdate._active_atlas_key.
+        """
+        data_bg_index = getattr(self.brain_nav, 'data_bg_index', None)
+        if data_bg_index is not None and file_nr_template == data_bg_index:
+            return ('data_as_template', file_nr)
+        return file_nr_template
+
+    def _ensure_hom(self, file_nr):
+        """
+        Return a Hommel object for the active statmap, computing and
+        caching it on demand. runARI discards `hom` after the analysis
+        (it's chunky — several m-length arrays — and most sessions
+        never run ROI TDP). We materialise it lazily the first time
+        an ROI computation is requested and cache it on fileInfo for
+        the rest of the session.
+        """
+        hom = self.brain_nav.fileInfo[file_nr].get('hom')
+        if hom is not None:
+            return hom
+
+        self.brain_nav.message_box.log_message(
+            "Computing Hommel decomposition for ROI TDP queries — "
+            "first ROI run for this statmap may take a moment."
+        )
+        p = self.brain_nav.fileInfo[file_nr]['p']
+        hom = pyHommel.hommel_wbTDP(p, simes=True)
+        self.brain_nav.fileInfo[file_nr]['hom'] = hom
+        return hom
+
+    def _mask_positions_for_roi(self, file_nr, file_nr_template, roi_label, atlas_key):
+        """
+        Resolve a single ROI label to the 0-based brain-mask positions its
+        voxels occupy on the analysis grid.
+
+        Uses fileInfo[file_nr]['atlas_on_analysis_grid'] — the atlas
+        resampled directly onto the statmap's canonical grid (built at atlas
+        upload; see NiftiLoader.load_user_atlas). Flat-indexing that grid
+        with indexp_linear yields a per-mask-voxel label array; np.where
+        picks out the positions for the requested ROI in one shot.
+
+        No template hop, no aligned_index_data, no -1 sentinels — the
+        analysis runs entirely on the data grid. file_nr_template and
+        atlas_key are kept in the signature for backward compatibility with
+        earlier callers but aren't consulted here: ROI membership is
+        template-independent by construction now.
+        """
+        file_info = self.brain_nav.fileInfo[file_nr]
+        atlas_grid = file_info.get('atlas_on_analysis_grid')
+        if atlas_grid is None:
+            # Atlas hasn't been aligned to this statmap's analysis grid —
+            # can happen if the atlas was loaded before this statmap. Ask
+            # the user to re-upload.
+            self.brain_nav.message_box.log_message(
+                "<span style='color: orange;'>Atlas isn't aligned to this "
+                "statmap's analysis grid. Re-upload the atlas after loading "
+                "the statmap.</span>"
+            )
+            return np.array([], dtype=np.int32)
+
+        indexp_linear = file_info['indexp_linear']
+        labels_at_mask = atlas_grid.ravel(order='C')[indexp_linear]
+        return np.where(labels_at_mask == int(roi_label))[0].astype(np.int32)
+
+    def compute_roi_tdps(self, file_nr, file_nr_template):
+        """
+        For every ROI in the active user atlas, compute the TDP via
+        Hommel.discoveries and build a results DataFrame. Writes both
+        the per-label dict (userAtlasInfo[atlas_key]['tdps_per_roi'])
+        and the table (fileInfo[file_nr]['tblROI_df']).
+
+        This is Step 4 of docs/ATLAS_TDP_PLAN.md. Columns ship lean for
+        now — ROI / Label / Size / TDP — peak-Z and centroid columns
+        land in a follow-up once the math is verified.
+
+        Returns the populated DataFrame (or None on no-op exits) so the
+        UI handler can pass it straight to the table widget.
+        """
+        atlas_key = self._resolve_atlas_key(file_nr, file_nr_template)
+        if atlas_key not in self.brain_nav.userAtlasInfo:
+            self.brain_nav.message_box.log_message(
+                "<span style='color: orange;'>No user atlas loaded for the "
+                "active template — upload one before running ROI analysis."
+                "</span>"
+            )
+            return None
+
+        # ARI must have run for this statmap — that's where p, indexp_linear,
+        # and tr_volDim get populated.
+        if 'p' not in self.brain_nav.fileInfo[file_nr]:
+            self.brain_nav.message_box.log_message(
+                "<span style='color: red;'>ARI hasn't run yet for this "
+                "statmap — cannot compute ROI TDPs.</span>"
+            )
+            return None
+
+        atlas_entry = self.brain_nav.userAtlasInfo[atlas_key]
+        atlas = atlas_entry['data']
+        codebook = atlas_entry['codebook']
+        alpha = self.brain_nav.input['alpha']
+
+        # MNI conversion uses the same template affine the cluster path uses
+        # (aligned template's post-transpose+rotate affine). Missing when
+        # ARI hasn't populated aligned_templateInfo yet — guard defensively.
+        template_info = self.brain_nav.aligned_templateInfo.get(
+            (file_nr, file_nr_template), {}
+        )
+        rtr_affine = template_info.get('rtr_template_affine')
+
+        # Progress dialog: one step per ROI plus one step for the Hommel
+        # decomposition (only runs the first time; still counted so the bar
+        # doesn't sit at 0% for the first few seconds when hom must materialise).
+        total_steps = len(codebook) + 1
+        progress = QProgressDialog(
+            "Computing ROI TDPs...", "Cancel", 0, total_steps,
+            self.brain_nav.main_window,
+        )
+        progress.setWindowModality(Qt.WindowModal)
+        # Shared dialog styling: Cancel on its own row, not touching the bar.
+        progress.setStyleSheet(Styles.progress_dialog_styling)
+        progress.setMinimumWidth(360)
+        progress.setMinimumDuration(0)  # show immediately, no half-second delay
+        progress.setValue(0)
+        progress.setLabelText("Preparing Hommel decomposition...")
+        progress.show()
+
+        hom = self._ensure_hom(file_nr)
+        progress.setValue(1)
+
+        rows = []
+        tdps_per_roi = {}
+        n_empty = 0
+        for step, (label, name) in enumerate(codebook.items(), start=1):
+            if progress.wasCanceled():
+                self.brain_nav.message_box.log_message(
+                    "<span style='color: orange;'>ROI analysis cancelled "
+                    "before completion.</span>"
+                )
+                progress.close()
+                return None
+
+            progress.setLabelText(
+                f"Computing TDP for ROI {step}/{len(codebook)}: {name}"
+            )
+            progress.setValue(step)
+            label_int = int(label)
+            roi_indices = np.where(atlas == label_int)
+            if roi_indices[0].size == 0:
+                tdps_per_roi[label_int] = None
+                n_empty += 1
+                continue
+
+            mask_positions = self._mask_positions_for_roi(
+                file_nr, file_nr_template, label_int, atlas_key
+            )
+            size = int(mask_positions.size)
+            if size == 0:
+                tdps_per_roi[label_int] = None
+                n_empty += 1
+                continue
+
+            # hom.discoveries returns the cumulative discovery count for
+            # the supplied selector. With incremental=False (default) we
+            # get just the final count for the full set.
+            n_discoveries = hom.discoveries(ix=mask_positions, alpha=alpha)
+            tdp = float(n_discoveries) / size
+            tdps_per_roi[label_int] = tdp
+
+            # Centroid in template UI space (axes match sagittal/coronal/
+            # axial as used by add_atlas_overlay + follow_roi_xyz).
+            cx = int(round(roi_indices[0].mean()))
+            cy = int(round(roi_indices[1].mean()))
+            cz = int(round(roi_indices[2].mean()))
+            centroid_vox = f"({cx}, {cy}, {cz})"
+
+            if rtr_affine is not None:
+                mni = self.xyz2MNI(np.array([cx, cy, cz]), rtr_affine)
+                centroid_mni = (
+                    f"({int(round(mni[0]))}, "
+                    f"{int(round(mni[1]))}, "
+                    f"{int(round(mni[2]))})"
+                )
+            else:
+                centroid_mni = 'N/A'
+
+            rows.append({
+                'ROI': name,
+                'Label': label_int,
+                'Size (vox)': size,
+                'TDP': round(tdp, 3),
+                'Centroid (vox)': centroid_vox,
+                'Centroid (MNI)': centroid_mni,
+            })
+
+        atlas_entry['tdps_per_roi'] = tdps_per_roi
+        # Reset any prior selection — the label set may have changed if the
+        # user replaced the atlas between runs.
+        self.brain_nav.ui_params['selected_roi_label'] = None
+
+        # Snap the progress bar to full so the dialog closes cleanly rather
+        # than lingering at the second-to-last tick.
+        progress.setValue(total_steps)
+        progress.close()
+
+        if not rows:
+            self.brain_nav.message_box.log_message(
+                "<span style='color: orange;'>ROI analysis produced no "
+                "results — no ROI had any voxels inside the brain mask."
+                "</span>"
+            )
+            self.brain_nav.fileInfo[file_nr]['tblROI_df'] = pd.DataFrame()
+            return None
+
+        tbl = (
+            pd.DataFrame(rows)
+            .sort_values('TDP', ascending=False)
+            .reset_index(drop=True)
+        )
+        self.brain_nav.fileInfo[file_nr]['tblROI_df'] = tbl
+
+        # Build the TDP-heatmap LUT alongside the categorical one so the
+        # renderer can swap between them without recomputing anything. Auto-
+        # range across the ROIs that actually scored: max-contrast within the
+        # analysis, at the cost of cross-map comparability.
+        tdp_lut, tdp_range = self._build_atlas_tdp_lut(atlas_entry)
+        atlas_entry['tdp_lut'] = tdp_lut
+        atlas_entry['tdp_range'] = tdp_range
+
+        # Log a compact preview to the message box so the user can verify
+        # the numbers even without opening the ROI Analysis tab. Cap the
+        # preview so a 9000-ROI atlas doesn't flood the log.
+        preview_rows = tbl.head(10).to_string(index=False)
+        self.brain_nav.message_box.log_message(
+            f"ROI analysis complete: {len(rows)} ROIs scored, "
+            f"{n_empty} skipped (no overlap with brain mask).<br>"
+            f"<pre style='font-family: Consolas, monospace; font-size: 10pt;'>"
+            f"{preview_rows}</pre>"
+        )
+        return tbl
+
+    def _build_atlas_tdp_lut(self, atlas_entry):
+        """
+        Build a heatmap RGBA LUT mirroring the shape of atlas_entry['lut']
+        (same (max_label+1, 4) uint8 contract, row 0 transparent, empty ROIs
+        transparent) but coloured by TDP via viridis. Auto-ranges across the
+        set of ROIs that actually scored so contrast fills the map; the
+        (vmin, vmax) pair is returned for the colourbar legend.
+
+        Degenerate cases:
+          - No scoring ROI: return (None, None). Renderer falls back to the
+            categorical LUT.
+          - All TDPs equal (or a single scoring ROI): every ROI maps to the
+            viridis midpoint (0.5) — a valid uniform colour rather than a
+            /0 crash.
+        """
+        import matplotlib.pyplot as plt
+
+        tdps = {
+            int(L): float(v)
+            for L, v in (atlas_entry.get('tdps_per_roi') or {}).items()
+            if v is not None
+        }
+        if not tdps:
+            return None, None
+
+        vmin = min(tdps.values())
+        vmax = max(tdps.values())
+        span = vmax - vmin
+
+        def norm(v):
+            return 0.5 if span < 1e-9 else (v - vmin) / span
+
+        cmap = plt.get_cmap('viridis')
+        n_rows = atlas_entry['lut'].shape[0]
+        tdp_lut = np.zeros((n_rows, 4), dtype=np.uint8)
+        alpha_byte = int(self.brain_nav.alpha * 255)
+
+        for label, tdp in tdps.items():
+            r, g, b, _ = cmap(norm(tdp))
+            tdp_lut[label] = [int(r * 255), int(g * 255), int(b * 255), alpha_byte]
+
+        return tdp_lut, (vmin, vmax)
+
+    def save_view_context(self, group):
+        """
+        Snapshot the current visual context (selection + overlay mode) for a
+        tab group before the user switches to the other analysis context.
+        Stored on ui_params so it rides along into .ari project saves.
+
+        Groups: 'cluster' (Whole Brain TDP / Cluster Analysis tabs) and
+        'roi' (ROI Analysis tab). The tables themselves already persist —
+        this only captures what the orthviews / 3D viewer were showing.
+        """
+        ui = self.brain_nav.ui_params
+        crosshair = (
+            self.brain_nav.sagittal_slice,
+            self.brain_nav.coronal_slice,
+            self.brain_nav.axial_slice,
+        )
+        if group == 'cluster':
+            ui['cluster_view_context'] = {
+                'selected_cluster_id': ui.get('selected_cluster_id'),
+                'selected_row': ui.get('selected_row'),
+                'crosshair': crosshair,
+            }
+        elif group == 'roi':
+            mode = ui.get('overlay_mode')
+            ui['roi_view_context'] = {
+                'selected_roi_label': ui.get('selected_roi_label'),
+                # Only persist an atlas-family mode; if the user never got
+                # into atlas view (e.g. no atlas loaded on a prior visit),
+                # default the next visit to the verification overlay.
+                'overlay_mode': mode if mode in ('atlas', 'roi') else 'atlas',
+                'crosshair': crosshair,
+            }
+
+    def _apply_saved_crosshair(self, ctx):
+        """Restore the crosshair slices from a saved view context, if any."""
+        crosshair = ctx.get('crosshair')
+        if crosshair is not None and len(crosshair) == 3:
+            self.brain_nav.sagittal_slice = int(crosshair[0])
+            self.brain_nav.coronal_slice = int(crosshair[1])
+            self.brain_nav.axial_slice = int(crosshair[2])
+
+    def restore_view_context(self, group):
+        """
+        Re-establish a previously saved visual context when the user returns
+        to a tab group: overlay mode, selection, 3D viewer AND crosshair
+        position — each analysis context keeps its own navigation spot.
+        """
+        ui = self.brain_nav.ui_params
+        file_nr = self.brain_nav.file_nr
+        file_nr_template = self.brain_nav.file_nr_template
+
+        if group == 'roi':
+            atlas_key = self._resolve_atlas_key(file_nr, file_nr_template)
+            if atlas_key not in self.brain_nav.userAtlasInfo:
+                # No atlas for the active view — nothing meaningful to show
+                # on this tab yet; leave the current view untouched.
+                return
+
+            ctx = ui.get('roi_view_context') or {}
+            self._apply_saved_crosshair(ctx)
+            label = ctx.get('selected_roi_label')
+            if label is not None:
+                # Re-renders overlay + contour + 3D and re-selects the table
+                # row in one call. move_crosshair=False keeps the restored
+                # position rather than jumping to the ROI centroid.
+                self.follow_roi_xyz(int(label), move_crosshair=False)
+            else:
+                # First visit (or nothing was selected): verification overlay.
+                ui['overlay_mode'] = ctx.get('overlay_mode', 'atlas')
+                ui['selected_roi_label'] = None
+                self.brain_nav.orth_view_update.update_slices()
+                self.brain_nav.orth_view_update.update_crosshairs()
+                self.brain_nav.threeDviewer.update_cluster_3d_view()
+
+        elif group == 'cluster':
+            self._reset_to_cluster_mode()
+            ctx = ui.get('cluster_view_context') or {}
+            self._apply_saved_crosshair(ctx)
+            cid = ctx.get('selected_cluster_id')
+
+            # Validity check — thresholds may have changed while the user was
+            # in the ROI context, so the remembered cluster may be gone.
+            tbl = self.brain_nav.fileInfo.get(file_nr, {}).get('tblARI_df')
+            valid = (
+                cid is not None
+                and not isinstance(cid, (list, tuple))
+                and tbl is not None
+                and not getattr(tbl, 'empty', True)
+                and 'Unique ID' in tbl.columns
+                and cid in tbl['Unique ID'].values
+            )
+            if valid:
+                ui['selected_cluster_id'] = cid
+                if ctx.get('selected_row') is not None:
+                    ui['selected_row'] = ctx['selected_row']
+                self.brain_nav.orth_view_update.update_slices(selected_cluster_id=cid)
+                self.brain_nav.threeDviewer.update_cluster_3d_view(cid)
+            else:
+                # Nothing (still) selected — render the plain cluster overlay.
+                ui['selected_cluster_id'] = None
+                self.brain_nav.orth_view_update.update_slices()
+                self.brain_nav.threeDviewer.update_cluster_3d_view()
+            self.brain_nav.orth_view_update.update_crosshairs()
+            # Keep the xyz spinboxes in sync with the restored position.
+            ui_help = getattr(self.brain_nav, 'UIHelp', None)
+            if ui_help is not None:
+                ui_help.update_ui_xyz()
+
+    def _reset_to_cluster_mode(self):
+        """
+        Flip overlay_mode back to 'cluster' and clear any lingering ROI
+        selection. Called at the top of every cluster-selection entry point
+        so a preceding ROI click doesn't leave the orthoviews / 3D viewer
+        pulling from userAtlasInfo when the user asks for a cluster.
+        Mirror of the mode + label writes at the bottom of follow_roi_xyz.
+        """
+        self.brain_nav.ui_params['overlay_mode'] = 'cluster'
+        self.brain_nav.ui_params['selected_roi_label'] = None
+
+    def follow_roi_xyz(self, roi_label, move_crosshair=True):
+        """
+        Select an ROI and switch the orthoviews into 'roi' overlay mode so
+        the chosen ROI keeps full alpha and the others dim, then refresh the
+        3D viewer.
+
+        move_crosshair=True (table-row click): jump the crosshair to the
+        ROI's centroid so its slices become visible.
+        move_crosshair=False (right-click 'Select ROI (xyz)'): leave the
+        crosshair where the user put it — they've already navigated to the
+        spot they care about.
+
+        The atlas volume is in template UI space, so the centroid — mean of
+        np.where(atlas == label) — plugs directly into sagittal_slice /
+        coronal_slice / axial_slice.
+        """
+        file_nr = self.brain_nav.file_nr
+        file_nr_template = self.brain_nav.file_nr_template
+        atlas_key = self._resolve_atlas_key(file_nr, file_nr_template)
+
+        if atlas_key not in self.brain_nav.userAtlasInfo:
+            return
+
+        atlas = self.brain_nav.userAtlasInfo[atlas_key]['data']
+        roi_indices = np.where(atlas == int(roi_label))
+        if roi_indices[0].size == 0:
+            self.brain_nav.message_box.log_message(
+                f"<span style='color: orange;'>ROI {int(roi_label)} has no "
+                f"voxels in the current template — cannot focus.</span>"
+            )
+            return
+
+        if move_crosshair:
+            # Centroid, rounded to int voxel coordinates. Axis order matches
+            # the cluster overlay path: sagittal = x = axis 0, coronal = y =
+            # axis 1, axial = z = axis 2, matching how add_atlas_overlay
+            # indexes into the same array.
+            cx = int(round(roi_indices[0].mean()))
+            cy = int(round(roi_indices[1].mean()))
+            cz = int(round(roi_indices[2].mean()))
+
+            self.brain_nav.sagittal_slice = cx
+            self.brain_nav.coronal_slice = cy
+            self.brain_nav.axial_slice = cz
+
+        self.brain_nav.ui_params['selected_roi_label'] = int(roi_label)
+        self.brain_nav.ui_params['overlay_mode'] = 'roi'
+
+        # Re-render slices + crosshairs so the selected ROI pops.
+        self.brain_nav.orth_view_update.update_slices()
+        self.brain_nav.orth_view_update.update_crosshairs()
+        # Same 3D-viewer refresh call the cluster path uses — update_cluster_3d_view
+        # branches on overlay_mode internally and pulls the ROI volume + LUT from
+        # userAtlasInfo when we're in 'roi' mode.
+        self.brain_nav.threeDviewer.update_cluster_3d_view(int(roi_label))
+
+        # Keep the ROI table in sync (highlight + scroll to the row), mirroring
+        # the cluster-analysis flow. Signal-blocked inside select_roi_row so it
+        # doesn't bounce back here; a no-op if the table isn't populated yet.
+        tblROI = getattr(self.brain_nav, 'tblROI', None)
+        if tblROI is not None:
+            tblROI.select_roi_row(int(roi_label))
     
