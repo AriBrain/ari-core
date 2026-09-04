@@ -244,15 +244,44 @@ class InitiateTabs(QWidget):
 
     def _on_tab_changed(self, index):
         """
-        Enable the cluster work station on every tab except ROI Analysis,
-        where cluster-level TDP editing doesn't apply. set_active greys the
-        whole panel (table, slider, buttons) and shows an inactive banner so
-        the slider can't silently mutate cluster state while the user is
-        working with ROIs.
+        On the ROI Analysis tab the cluster work station is meaningless
+        (cluster-level TDP editing doesn't apply), so we hide it entirely and
+        hand its vertical space to the tab area — the ROI table gets the extra
+        rows. Any other tab restores the original layout. set_active still
+        runs underneath so the slider/buttons stay functionally disabled
+        while in ROI mode.
         """
         cluster_ws = getattr(self.brain_nav, 'cluster_ws', None)
-        if cluster_ws is not None and hasattr(cluster_ws, 'set_active'):
-            cluster_ws.set_active(index != self.roi_analysis_tab_index)
+        if cluster_ws is None or not hasattr(cluster_ws, 'set_active'):
+            return
+
+        on_roi_tab = (index == self.roi_analysis_tab_index)
+        cluster_ws.set_active(not on_roi_tab)
+
+        ws_container = getattr(cluster_ws, 'work_station_container', None)
+        if ws_container is None:
+            return
+
+        if on_roi_tab and ws_container.isVisible():
+            # Remember the geometry we're about to change so restore is exact.
+            self._table_container_base_height = self.table_container.height()
+            # Actual rendered height; fall back to the hint if the widget
+            # hasn't been laid out yet (e.g. tab switched before first show).
+            ws_height = ws_container.height() or ws_container.sizeHint().height()
+            # Reclaim the right column's inter-widget spacing too. Read it
+            # from the live layout (right_container's QVBoxLayout) rather
+            # than hardcoding, with 10 as the historical fallback.
+            parent = self.table_container.parentWidget()
+            spacing = parent.layout().spacing() if parent and parent.layout() else 10
+            ws_container.setVisible(False)
+            self.table_container.setFixedHeight(
+                self._table_container_base_height + ws_height + spacing
+            )
+        elif not on_roi_tab and not ws_container.isVisible():
+            base = getattr(self, '_table_container_base_height', None)
+            if base is not None:
+                self.table_container.setFixedHeight(base)
+            ws_container.setVisible(True)
 
     def init_metrics_container(self):
         # Create the metrics layout

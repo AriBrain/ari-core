@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 # **PyQt Imports**
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QVBoxLayout, QWidget, QHBoxLayout, QGridLayout,  QDesktopWidget, QSpacerItem, QSizePolicy, QListWidgetItem
+    QApplication, QMainWindow, QVBoxLayout, QWidget, QHBoxLayout, QGridLayout, QSpacerItem, QSizePolicy, QListWidgetItem
 )
 
 # **Project-Specific Imports (Ordered by Functionality)**
@@ -247,13 +247,15 @@ class BrainNav(QMainWindow):
 
         # === Set Window Properties === #
         self.setWindowTitle("ARIBrain")
-        # availableGeometry (not screenGeometry): the full screen rect ignores
-        # the macOS menu bar / dock, so a window forced to it gets its content
-        # area silently compressed below the layout minimum — fixed-size panes
-        # then overflow their grid cells and the bottom orthview titles paint
-        # over the upper panes. The available rect is what we can actually use.
-        screen_resolution = QDesktopWidget().availableGeometry()
-        self.setGeometry(screen_resolution)
+        # Maximize via window state rather than setGeometry: setGeometry sizes
+        # the CLIENT area, so passing the screen's available rect made the
+        # contents that tall and the title bar was added on top — the window
+        # bottom (work station + message log) hung ~28px off-screen until the
+        # user double-clicked the title bar (macOS zoom sets the FRAME to the
+        # available rect, which is what we want from the start). Flagging the
+        # state here means the later .show() opens the window properly
+        # maximized with OS-computed, frame-aware geometry.
+        self.setWindowState(Qt.WindowMaximized)
 
         # === Central Widget & Layout === #
         self.central_widget = QWidget()
