@@ -247,8 +247,13 @@ class BrainNav(QMainWindow):
 
         # === Set Window Properties === #
         self.setWindowTitle("ARIBrain")
-        screen_resolution = QDesktopWidget().screenGeometry()
-        self.setGeometry(0, 0, screen_resolution.width(), screen_resolution.height())
+        # availableGeometry (not screenGeometry): the full screen rect ignores
+        # the macOS menu bar / dock, so a window forced to it gets its content
+        # area silently compressed below the layout minimum — fixed-size panes
+        # then overflow their grid cells and the bottom orthview titles paint
+        # over the upper panes. The available rect is what we can actually use.
+        screen_resolution = QDesktopWidget().availableGeometry()
+        self.setGeometry(screen_resolution)
 
         # === Central Widget & Layout === #
         self.central_widget = QWidget()
@@ -337,6 +342,9 @@ class BrainNav(QMainWindow):
         # Create the grid layout for the slices
         self.slice_layout = QGridLayout()
         self.slice_layout.setSpacing(5)
+        # Keep the outer margins tight — every vertical pixel counts against
+        # the two fixed-height 435px tile rows fitting on laptop screens.
+        self.slice_layout.setContentsMargins(5, 5, 5, 5)
 
         # Create the three ImageViews
         self.axial_view = pg.ImageView()
@@ -349,33 +357,51 @@ class BrainNav(QMainWindow):
 
 
         for view in [self.axial_view, self.sagittal_view, self.coronal_view]:
-            view.ui.histogram.hide()  
+            view.ui.histogram.hide()
             view.ui.roiBtn.hide()
             view.ui.menuBtn.hide()
-            view.setFixedSize(400, 400)
+            # Scale with the window instead of a hard 400x400: fixed panes
+            # overflowed their grid cells on smaller screens (titles painting
+            # over neighbouring panes) and wasted space on larger ones.
+            # pg.ImageView letterboxes its content (ViewBox aspect is locked),
+            # so a non-square pane still shows an undistorted brain.
+            view.setMinimumSize(300, 300)
+            view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             view.setStyleSheet(" ".join(Styles.orth_view_styling))
 
         # ---------------------------
         #  Create each "tile" layout
         # ---------------------------
 
+        # Each tile: fixed-height title + expanding view, tight spacing. The
+        # view absorbs whatever height the grid row provides, so titles always
+        # sit flush on their own pane regardless of window size.
+
         # 1) Sagittal tile
         sag_layout = QVBoxLayout()
+        sag_layout.setSpacing(2)
+        sag_layout.setContentsMargins(0, 0, 0, 0)
         sag_layout.addWidget(Styles.orth_title_style('Sagittal Slice', 400, 35))
         sag_layout.addWidget(self.sagittal_view)
 
         # 2) Coronal tile
         cor_layout = QVBoxLayout()
+        cor_layout.setSpacing(2)
+        cor_layout.setContentsMargins(0, 0, 0, 0)
         cor_layout.addWidget(Styles.orth_title_style('Coronal Slice', 400, 35))
         cor_layout.addWidget(self.coronal_view)
 
         # 3) Axial tile
         ax_layout = QVBoxLayout()
+        ax_layout.setSpacing(2)
+        ax_layout.setContentsMargins(0, 0, 0, 0)
         ax_layout.addWidget(Styles.orth_title_style('Axial Slice', 400, 35))
         ax_layout.addWidget(self.axial_view)
 
         # 4) “Metrics” tile (title + metrics label + slider + reset button)
         cluster_viewer_layout = QVBoxLayout()
+        cluster_viewer_layout.setSpacing(2)
+        cluster_viewer_layout.setContentsMargins(0, 0, 0, 0)
         # metrics_layout.addWidget(Styles.orth_title_style('Metrics', 400, 35))
         cluster_viewer_layout.addWidget(Styles.cluster_viewer_title_style('3D Cluster Viewer', 400, 35))
 
@@ -393,11 +419,23 @@ class BrainNav(QMainWindow):
         self.slice_layout.addLayout(cor_layout, 0, 1)
 
         # **Add Vertical Spacer**
-        vertical_spacer = QSpacerItem(20, 20, QSizePolicy.Minimum, QSizePolicy.Expanding)
+        # Fixed small gap (was Expanding): with two fixed-height 435px tile
+        # rows, an expanding spacer competed for vertical budget on laptop
+        # screens and contributed to the bottom-row titles overlapping the
+        # upper panes. A fixed 10px keeps the visual separation without
+        # claiming space the tiles need.
+        vertical_spacer = QSpacerItem(20, 10, QSizePolicy.Minimum, QSizePolicy.Fixed)
         self.slice_layout.addItem(vertical_spacer, 1, 0, 1, 2)  # Row 1, spanning both columns
 
         self.slice_layout.addLayout(ax_layout, 2, 0)
         self.slice_layout.addLayout(cluster_viewer_layout, 2, 1)
+
+        # Let the two pane rows and both columns share the window's space
+        # equally; the spacer row and controls row keep their natural height.
+        self.slice_layout.setRowStretch(0, 1)
+        self.slice_layout.setRowStretch(2, 1)
+        self.slice_layout.setColumnStretch(0, 1)
+        self.slice_layout.setColumnStretch(1, 1)
 
         # -------------------------------------
         #  Create a button panel to control some aspects of the viewers.
@@ -449,12 +487,15 @@ class BrainNav(QMainWindow):
 
         # **First add sidebar (self.left_panel_container)**
         outer_layout.addWidget(self.left_side_bar.left_panel_container, alignment=Qt.AlignLeft)
-        
+
         # **Then add the main panes (self.left_container)**
-        outer_layout.addWidget(self.left_container, alignment=Qt.AlignTop)
+        # No alignment flag here: AlignTop would cap the pane grid at its
+        # size hint and block the views from expanding with the window.
+        # Stretch 3:2 between panes and the right column.
+        outer_layout.addWidget(self.left_container, stretch=3)
 
         # **Finally, add right panel**
-        outer_layout.addWidget(self.right_container, alignment=Qt.AlignTop)
+        outer_layout.addWidget(self.right_container, stretch=2, alignment=Qt.AlignTop)
 
         # Set the outer layout as the central widget's layout
         self.central_widget.setLayout(outer_layout)

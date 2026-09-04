@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QLabel
+from PyQt5.QtWidgets import QLabel, QSizePolicy
 
 class Styles:
     upload_button_styling =  """
@@ -123,10 +123,14 @@ class Styles:
             "padding: 5px;"               # Add padding inside the label
             "background-color: #6ca88b;"  # Set background color
         )
-        label.setFixedWidth(width)  # Set the fixed height of the label
-        label.setFixedHeight(height)  # Set the fixed height of the label
+        # Width tracks the pane (the orthviews scale with the window now);
+        # `width` acts as the minimum so the label never collapses. Height
+        # stays fixed so the title bar keeps its strip look.
+        label.setMinimumWidth(min(width, 200))
+        label.setFixedHeight(height)
+        label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         return label
-    
+
     @staticmethod
     def cluster_viewer_title_style(text, width=400, height=20):
         label = QLabel(text)
@@ -136,8 +140,10 @@ class Styles:
             "padding: 5px;"               # Add padding inside the label
             "background-color: #253d32;"  # Set background color
         )
-        label.setFixedWidth(width)  # Set the fixed height of the label
-        label.setFixedHeight(height)  # Set the fixed height of the label
+        # Same expanding behaviour as orth_title_style.
+        label.setMinimumWidth(min(width, 200))
+        label.setFixedHeight(height)
+        label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         return label
     
     plus_button_styling = """
