@@ -6,6 +6,8 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QPushButton, QFormLayout, QHB
 from PyQt5.QtGui import QPalette, QBrush, QPixmap, QFont, QImage, QColor
 from PyQt5.QtCore import Qt
 import os
+import pickle
+from ari_application import get_package_dir
 from ari_application.ui.main_window import BrainNav
 from ari_application.ui.components.save_and_export import PROJECT_FILE_FORMAT_VERSION
 import pickle
@@ -71,7 +73,7 @@ class StartWindow(QWidget):
         self.main_layout.addStretch()
 
         # Set the background image with slight transparency
-        self.set_background_image(os.path.join(os.path.dirname(__file__), '..', 'public', 'logo_bw.png'))
+        self.set_background_image(os.path.join(get_package_dir(), 'public', 'logo_bw.png'))
 
         # Initialize placeholders for orthogonal views and header information
         self.sagittal_view = QLabel(self)
@@ -491,8 +493,8 @@ class StartWindow(QWidget):
         start_input['tdf'] = self.tdf
 
         # We always have the same template dir (there are the default templates)
-        start_input['template_dir'] = os.path.join(os.path.dirname(__file__), '..', 'public/templates')
-        start_input['template_mask_fp'] = os.path.join(os.path.dirname(__file__), '..', 'public/template_masks' ,'mni_template_icbm152_inmask.nii')
+        start_input['template_dir'] = os.path.join(get_package_dir(), 'public', 'templates')
+        start_input['template_mask_fp'] = os.path.join(get_package_dir(), 'public', 'template_masks', 'mni_template_icbm152_inmask.nii')
 
 
         # Define the fileype in case auto detection returned None. 

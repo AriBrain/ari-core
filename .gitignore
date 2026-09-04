@@ -29,6 +29,7 @@ dist/
 
 # PyInstaller output
 *.spec
+!aribrain.spec
 
 # Jupyter notebooks (optional)
 .ipynb_checkpoints/
@@ -46,3 +47,4 @@ dist/
 
 # ARIBrain specific files
 *.ari
+*.log

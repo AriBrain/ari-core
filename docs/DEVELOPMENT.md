@@ -44,7 +44,7 @@ From the repo root:
 ```bash
 python3.10 -m venv .venv
 .venv/bin/pip install --upgrade pip
-.venv/bin/pip install -e .
+.venv/bin/pip install -e ".[build]"
 ```
 
 What each step does:
@@ -54,13 +54,15 @@ What each step does:
   so it never gets committed. Roughly 400–700 MB once populated.
 - `pip install --upgrade pip` bumps pip to a version that understands modern
   `pyproject.toml` metadata.
-- `pip install -e .` reads `pyproject.toml`, finds the
+- `pip install -e ".[build]"` reads `pyproject.toml`, finds the
   `setuptools.build_meta` backend, runs `setup.py` to compile the Cython
   extensions (`ARICluster`, `hommel`) *in place* — dropping
   `.cpython-310-darwin.so` files next to the `.pyx` sources — and then
   writes a `.pth` pointer in `.venv/lib/python3.10/site-packages/` that
   redirects any `import ari_application` back to the source tree. No second
-  copy on disk.
+  copy on disk. The `[build]` extra additionally installs PyInstaller, which
+  you need for building the standalone `.app` (see section 4). End-user
+  installs skip that extra.
 
 After this, the dev venv has exactly one physical copy of `ari_application`
 (the source tree), and edits to `.py` files take effect immediately on the
@@ -172,11 +174,17 @@ Reverse order: remove from `pyproject.toml`, then
 
 ## 4. Building the standalone `.app`
 
-See [BUILD_INSTRUCTIONS.md](BUILD_INSTRUCTIONS.md). Key thing to remember:
-PyInstaller bundles whatever is in the pipx venv at build time, so make sure
-you've done a `pipx reinstall aribrain` (or at least installed any new deps
-into that venv) before running the build. The dev `.venv/` is not used for
-building the standalone app.
+See [BUILD_INSTRUCTIONS.md](BUILD_INSTRUCTIONS.md). The build runs out of
+the dev `.venv/`: `aribrain.spec` locates the package via
+`import ari_application`, so whichever venv runs PyInstaller must have the
+editable install in place. Since `.venv` already does, the workflow is:
+
+```bash
+.venv/bin/pyinstaller aribrain.spec --clean
+```
+
+PyInstaller is pulled in by the `[build]` extra in section 1a, so no extra
+install step is needed.
 
 ---
 

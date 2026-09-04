@@ -1,12 +1,14 @@
+import os
+
 from PyQt5.QtWidgets import QSplashScreen
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtCore import Qt
-import os
+
+from ari_application import get_package_dir
 
 class SplashScreen(QSplashScreen):
     def __init__(self):
-        # Construct the file path for the logo
-        logo_path = os.path.join(os.path.dirname(__file__), '..', 'public', 'logo.jpg')
+        logo_path = os.path.join(get_package_dir(), 'public', 'logo.jpg')
         
         # Load the logo image
         pixmap = QPixmap(logo_path)
