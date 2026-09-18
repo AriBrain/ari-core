@@ -323,6 +323,26 @@ class SaveAndExportTab(QWidget):
         # whatever state we ended up in.
         bn.tblROI.restore_from_session()
 
+        # If the atlas couldn't be restored, an atlas-family overlay mode is
+        # no longer honourable — drop back to clusters rather than leaving a
+        # mode set that nothing can render.
+        if not bn.userAtlasInfo and bn.ui_params.get('overlay_mode') in ('atlas', 'roi'):
+            bn.ui_params['overlay_mode'] = 'cluster'
+            bn.ui_params['selected_roi_label'] = None
+
+        # Re-render in the restored overlay mode. The BrainNav(load_data=True)
+        # route calls us last, after setup_viewer() has already drawn against
+        # an empty userAtlasInfo, so without this a project saved in ROI mode
+        # reopened with the cluster overlay while its ROI table said otherwise.
+        # (The in-app load_project route re-renders again via refresh_ui; a
+        # second update_slices is cheap and keeps the two paths identical.)
+        bn.orth_view_update.update_slices()
+        if bn.ui_params.get('overlay_mode') == 'roi':
+            selected = bn.ui_params.get('selected_roi_label')
+            bn.threeDviewer.update_cluster_3d_view(
+                int(selected) if selected is not None else None
+            )
+
 
 
     def export_results(self):
