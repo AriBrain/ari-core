@@ -2373,7 +2373,9 @@ class Metrics:
             viridis midpoint (0.5) — a valid uniform colour rather than a
             /0 crash.
         """
-        import matplotlib.pyplot as plt
+        # The colormap registry, not pyplot: this runs inside a Qt app and
+        # importing pyplot drags in a backend for no reason here.
+        from matplotlib import colormaps
 
         tdps = {
             int(L): float(v)
@@ -2390,7 +2392,7 @@ class Metrics:
         def norm(v):
             return 0.5 if span < 1e-9 else (v - vmin) / span
 
-        cmap = plt.get_cmap('viridis')
+        cmap = colormaps['viridis']
         tdp_lut = np.zeros((n_rows, 4), dtype=np.uint8)
         alpha_byte = int(self.brain_nav.alpha * 255)
 
@@ -2578,4 +2580,3 @@ class Metrics:
         tblROI = getattr(self.brain_nav, 'tblROI', None)
         if tblROI is not None:
             tblROI.select_roi_row(int(roi_label))
-    

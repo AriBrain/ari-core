@@ -631,6 +631,12 @@ class TblROI(QWidget):
             self.brain_nav.file_nr_template,
         )
         if df is None or df.empty:
+            # Cancelled, or nothing overlapped the data. Fall back to what the
+            # session legitimately holds for this statmap — restore_from_session
+            # shows the stored results if the run was cancelled, or the codebook
+            # preview if the run genuinely produced none — rather than leaving
+            # another run's numbers on screen implying they belong to this one.
+            self.restore_from_session()
             return
         self.update_table(df)
         # tdp_lut is built inside compute_roi_tdps, so the heatmap option

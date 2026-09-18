@@ -401,6 +401,17 @@ class SaveAndExportTab(QWidget):
             except KeyError as e:
                 self.brain_nav.message_box.warn(f"Skipping file_nr {file_nr}: missing field {e}")
 
+    @staticmethod
+    def _export_stem(filename):
+        """
+        Filename stem for export names: drop the NIfTI extension so outputs
+        read 'roi_table_mymap_1.csv' rather than 'roi_table_mymap.nii_1.csv'.
+        """
+        for ext in ('.nii.gz', '.nii'):
+            if filename.endswith(ext):
+                return filename[:-len(ext)]
+        return filename
+
     def export_all_roi_tables_to_csv(self, output_dir):
         """
         Export the ROI TDP tables (atlas-based analysis) for every statmap
@@ -413,7 +424,9 @@ class SaveAndExportTab(QWidget):
             df = self.fileInfo[file_nr].get('tblROI_df')
             if df is None or getattr(df, 'empty', True):
                 continue
-            fn = self.fileInfo[file_nr].get('filename', f'file{file_nr}')
+            fn = self._export_stem(
+                self.fileInfo[file_nr].get('filename', f'file{file_nr}')
+            )
             file_path = join(output_dir, f"roi_table_{fn}_{i+1}.csv")
             df.to_csv(file_path, index=False)
             self.brain_nav.message_box.log_message(f"ROI table saved: {file_path}")
@@ -454,7 +467,7 @@ class SaveAndExportTab(QWidget):
             ):
                 continue
 
-            fn = info.get('filename', f'file{file_nr}')
+            fn = self._export_stem(info.get('filename', f'file{file_nr}'))
 
             # Labels at the analysed voxels only; everything else stays 0.
             in_mask_labels = atlas_grid.ravel(order='C')[indexp_linear]
