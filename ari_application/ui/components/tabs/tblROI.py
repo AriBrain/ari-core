@@ -354,6 +354,40 @@ class TblROI(QWidget):
         self.colour_mode_selector.blockSignals(False)
         self.colour_mode_selector.setEnabled(has_heat)
 
+    def sync_to_active_statmap(self):
+        """
+        Re-point the whole ROI tab at the statmap that is now active.
+
+        ROI results are per-statmap (fileInfo['tblROI_df'] / 'roi_tdps'), but
+        the atlas itself is shared, so switching maps must swap the table and
+        the heatmap LUT without unloading the atlas. When the incoming map has
+        no results yet we also drop the ROI selection and fall back to the
+        verification overlay — keeping a selection whose TDP belongs to the
+        previous map is how stale numbers used to end up on screen.
+
+        Called by LeftSideBar.set_selected_statmap.
+        """
+        bn = self.brain_nav
+        if not bn.userAtlasInfo:
+            return
+
+        self.restore_from_session()
+
+        has_results = bn.fileInfo.get(bn.file_nr, {}).get('roi_tdps') is not None
+        if not has_results:
+            bn.ui_params['selected_roi_label'] = None
+            if bn.ui_params.get('overlay_mode') == 'roi':
+                bn.ui_params['overlay_mode'] = 'atlas'
+
+        # Re-render only if the orthviews are actually showing the atlas;
+        # in cluster mode the caller's own refresh already did the work.
+        if bn.ui_params.get('overlay_mode') in ('atlas', 'roi'):
+            bn.orth_view_update.update_slices()
+            selected = bn.ui_params.get('selected_roi_label')
+            bn.threeDviewer.update_cluster_3d_view(
+                int(selected) if selected is not None else None
+            )
+
     def select_roi_row(self, roi_label):
         """
         Highlight and scroll to the row for a given ROI label, without

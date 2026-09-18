@@ -252,6 +252,7 @@ class LeftSideBar(QWidget):
             self.brain_nav.UIHelp.refresh_ui()           # updated: ari table, 3dviewer, metrics, orthoview
             self.brain_nav.UIHelp.update_ui_xyz()        # updates: spinboxes    
             self.brain_nav.cluster_ws.update_work_station(selected_row=None)  # updates: workstation table and cluster tdp slider and box - requires selected row
+            self.brain_nav.tblROI.sync_to_active_statmap()  # updates: ROI table, heatmap LUT, ROI selection
             
 
             # set the whole brain tresholdslider to the selected statmap (this is in sunch with the table etc.)
