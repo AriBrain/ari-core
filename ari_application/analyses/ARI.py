@@ -69,6 +69,10 @@ class pyARI:
                 margin-top: 10px;
             }
         """)
+        # Give the Cancel button its own row instead of touching the bar.
+        from ari_application.resources.styles import Styles
+        progress.setStyleSheet(Styles.progress_dialog_styling)
+        progress.setMinimumWidth(360)
         progress.setValue(0)
         progress.show()
 
@@ -492,14 +496,10 @@ class pyARI:
             index_matrix = index_matrix.T
             index_image = nib.Nifti1Image(index_matrix, affine=overlay_image.affine, header=overlay_image.header)
 
-            # Step 2: Align the index image to the template
-            a_index_image, _ = ImageProcessing.align_images(template_image, index_image, order=0)
-
-            # Step 3: Transpose the aligned index image
-            tra_index_image = ImageProcessing.transpose_image(a_index_image)
-
-            # Step 4: Rotate the transposed aligned image
-            _, rtra_index_image, _ = ImageProcessing.rotate_volume(tra_index_image)
+            # Steps 2-4: align + transpose + rotate via the shared label-volume
+            # helper (nearest-neighbour resample preserves the per-voxel index
+            # values, which is the whole point of this image).
+            rtra_index_image = ImageProcessing.align_label_volume(template_image, index_image)
 
             # Step 5: Extract the final data
             aligned_index_data = rtra_index_image.get_fdata()

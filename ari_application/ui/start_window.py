@@ -164,11 +164,17 @@ class StartWindow(QWidget):
                 'ranges': ranges,
                 'start_input': start_input,
                 'stat_image_names': stat_image_names,
-                'template_names': template_names
+                'template_names': template_names,
+                # Slim user-atlas metadata (path + codebook); BrainNav
+                # re-aligns from disk after init. Absent in older files.
+                'user_atlas': project_data.get('user_atlas'),
             }
 
             # Create and show the main window
             self.main_window = BrainNav(start_input, load_data=True, data2load=data_package)
+            # showMaximized (not show): the platform-guaranteed way to open the
+            # main window maximized on macOS — pre-show geometry/state tricks in
+            # BrainNav.__init__ were unreliable and left panes off-screen.
 
             # MessageLogger buffers pre-init writes, so these surface in the UI
             # log once init_message_box() runs during BrainNav.__init__.
@@ -188,7 +194,7 @@ class StartWindow(QWidget):
                 f"{len(atlasInfo)} atlas entries)"
             )
 
-            self.main_window.show()
+            self.main_window.showMaximized()
             self.close()
             
     def transition_to_import_data(self):
@@ -526,7 +532,10 @@ class StartWindow(QWidget):
         # Instantiate the main window and pass the start_input dictionary
         self.main_window = BrainNav(start_input)
 
-        self.main_window.show()
+        # showMaximized (not show): the platform-guaranteed way to open the
+        # main window maximized on macOS — pre-show geometry/state tricks in
+        # BrainNav.__init__ were unreliable and left panes off-screen.
+        self.main_window.showMaximized()
 
         # Close the current start window
         self.close()

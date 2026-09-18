@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QLabel
+from PyQt5.QtWidgets import QLabel, QSizePolicy
 
 class Styles:
     upload_button_styling =  """
@@ -45,7 +45,31 @@ class Styles:
                 background-color: #a9a9a9;  /* Change background color on hover */
             }
         """
-    
+
+    # Wider variant of overlay_button_styling — used for the Whole Brain TDP
+    # tab atlas section, where labels like "Run ROI Analysis" don't fit in the
+    # 60px cap. Also styles the disabled state so a greyed-out button reads as
+    # intentional rather than broken.
+    atlas_button_styling = """
+            QPushButton {
+                border: 2px solid #a9cfbd;
+                border-radius: 5px;
+                padding: 6px 12px;
+                background-color: #808080;
+                font-size: 11px;
+                color: white;
+                min-width: 120px;
+            }
+            QPushButton:hover {
+                background-color: #a9a9a9;
+            }
+            QPushButton:disabled {
+                background-color: #555555;
+                color: #999999;
+                border-color: #666666;
+            }
+        """
+
     runARI_button_styling = """
             QPushButton {
                 border: 2px solid #a9cfbd;  /* Set border color and width */
@@ -90,6 +114,22 @@ class Styles:
             "background-color: #091c13;"   # Set background color
         ]
 
+    # Shared styling for QProgressDialogs (ARI run, ROI TDP computation).
+    # The default layout puts the Cancel button flush against the progress
+    # bar; the button margin pushes it onto its own row, and the bar keeps
+    # its percentage text centred instead of squished.
+    progress_dialog_styling = """
+            QProgressBar {
+                text-align: center;
+                min-height: 20px;
+            }
+            QPushButton {
+                min-width: 90px;
+                padding: 6px 14px;
+                margin-top: 10px;
+            }
+        """
+
     @staticmethod
     def orth_title_style(text, width=400, height=20):
         label = QLabel(text)
@@ -99,10 +139,14 @@ class Styles:
             "padding: 5px;"               # Add padding inside the label
             "background-color: #6ca88b;"  # Set background color
         )
-        label.setFixedWidth(width)  # Set the fixed height of the label
-        label.setFixedHeight(height)  # Set the fixed height of the label
+        # Width tracks the pane (the orthviews scale with the window now);
+        # `width` acts as the minimum so the label never collapses. Height
+        # stays fixed so the title bar keeps its strip look.
+        label.setMinimumWidth(min(width, 200))
+        label.setFixedHeight(height)
+        label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         return label
-    
+
     @staticmethod
     def cluster_viewer_title_style(text, width=400, height=20):
         label = QLabel(text)
@@ -112,8 +156,10 @@ class Styles:
             "padding: 5px;"               # Add padding inside the label
             "background-color: #253d32;"  # Set background color
         )
-        label.setFixedWidth(width)  # Set the fixed height of the label
-        label.setFixedHeight(height)  # Set the fixed height of the label
+        # Same expanding behaviour as orth_title_style.
+        label.setMinimumWidth(min(width, 200))
+        label.setFixedHeight(height)
+        label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         return label
     
     plus_button_styling = """
