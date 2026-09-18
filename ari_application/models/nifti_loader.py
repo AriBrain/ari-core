@@ -480,6 +480,13 @@ class NiftiLoader:
         helper if it exists, and fill in `ROI <n>` defaults for any labels
         missing from the codebook (or for all labels if there's no sidecar).
 
+        The returned codebook is restricted to labels that actually occur in
+        the uploaded volume. A sidecar routinely names more regions than a
+        given atlas contains (drop the AAL2 codebook next to a 20-region
+        subset and it names 120), and every consumer — the ROIs-loaded
+        readout, the pre-run preview table, the progress bar's denominator —
+        treats the codebook as the region list.
+
         Logs whether a sidecar was found and how many labels it named vs.
         how many fell through to auto-generated defaults, so the user isn't
         guessing whether their codebook file was picked up.
@@ -490,8 +497,13 @@ class NiftiLoader:
 
         if sidecar is not None:
             try:
-                codebook = NiftiLoader.parse_atlas_codebook(sidecar)
-                matched = sum(1 for lbl in labels_set if int(lbl) in codebook)
+                parsed = NiftiLoader.parse_atlas_codebook(sidecar)
+                # Keep only the regions this atlas actually contains.
+                codebook = {
+                    int(lbl): parsed[int(lbl)]
+                    for lbl in labels_set if int(lbl) in parsed
+                }
+                matched = len(codebook)
                 self.brain_nav.message_box.log_message(
                     f"Codebook sidecar found: {os.path.basename(sidecar)} "
                     f"— {matched} of {len(labels_set)} atlas labels named."
@@ -522,7 +534,8 @@ class NiftiLoader:
         Replace the codebook on every userAtlasInfo entry with names parsed
         from `codebook_path` (AAL2-format `.txt`). Preserves the auto-
         generated `ROI <label>` fallback for any labels missing from the
-        file so no ROI ever renders as blank.
+        file so no ROI ever renders as blank, and drops names for labels the
+        atlas doesn't contain so the region count stays truthful.
 
         Returns True on a successful parse (regardless of how many labels
         matched), False if the file couldn't be read or the atlas isn't
@@ -551,9 +564,13 @@ class NiftiLoader:
         sample_atlas = sample_entry['data']
         labels_present = np.unique(sample_atlas[sample_atlas > 0]).astype(int)
 
-        new_codebook = dict(parsed)
-        for lbl in labels_present:
-            new_codebook.setdefault(int(lbl), f"ROI {int(lbl)}")
+        # Restricted to the labels present in the atlas, for the same reason
+        # the upload path restricts the sidecar: the codebook doubles as the
+        # region list everywhere downstream.
+        new_codebook = {
+            int(lbl): parsed.get(int(lbl), f"ROI {int(lbl)}")
+            for lbl in labels_present
+        }
 
         # Every entry keyed under the current atlas gets the new dict.
         # Reference-shared is fine — the codebook is immutable in practice.
