@@ -1578,6 +1578,14 @@ class Metrics:
         # self.brain_nav.statmaps[file_nr]['overlay_data'] = aligned_overlay_data
         self.brain_nav.aligned_statMapInfo[(file_nr, file_nr_template)]['overlay_data']    = aligned_overlay_data
 
+        # overlay_data for this pair now holds integer cluster labels, not the
+        # continuous gradient map. Set the flag in the same breath as the data
+        # so the renderer can never be told the wrong thing: the two used to be
+        # written in different places, and a stale flag sent a label map down
+        # the level-scaled colour path, which recolours clusters per slice.
+        # Step 7 below re-renders immediately, so ordering here is load-bearing.
+        self.brain_nav.aligned_statMapInfo[(file_nr, file_nr_template)]['gradmap_flag']    = False
+
         # Step 7: Update visual slices with selected cluster highlighted
         self.brain_nav.orth_view_update.update_slices(selected_cluster_id=cluster_label)
 

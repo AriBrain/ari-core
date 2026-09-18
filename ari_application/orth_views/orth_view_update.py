@@ -270,19 +270,45 @@ class OrthViewUpdate:
 
     def add_overlay_with_transparency(self, selected_cluster_id=None):
         """
-        Add the overlay data to the views with transparency.
-        This method uses the stable cluster LUT for consistent visualization.
+        Draw the statmap overlay on the three slices.
+
+        `overlay_data` for a (statmap, template) pair holds one of two very
+        different things, and they need opposite colour mappings:
+
+          gradmap_flag True  -> the continuous TDP gradient map (values in
+                                [0, 1]); colour by LEVEL.
+          gradmap_flag False -> the integer cluster label map; colour by
+                                direct LUT INDEX, so cluster N is always
+                                LUT row N.
+
+        Mixing them up silently recolours everything: a level-mapped label
+        map rescales whatever labels happen to be present in the current
+        slice across the whole LUT, so the same cluster draws in a different
+        colour on different slices and in a different colour than the index
+        path gives. That was the "colours change once I engage with the map"
+        bug — update_overlay_image wrote the cluster map and re-rendered
+        while the flag still said gradient, and only the first-thresholded
+        template ever had its flag cleared.
+
+        Non-brain / non-cluster voxels are encoded as plain 0 in both modes
+        and row 0 of the LUT is the fully transparent background row, so the
+        background is handled identically whichever mapping is in play. The
+        old NaN round-trip (write NaN, then nan_to_num it straight back to 0)
+        only existed to steer pyqtgraph's automatic level detection, which we
+        no longer rely on.
         """
 
         if selected_cluster_id is not None:
             selected_cluster_id -= 1
 
         file_nr = self.brain_nav.file_nr
+        file_nr_template = self.brain_nav.file_nr_template
+        statmap_entry = self.brain_nav.aligned_statMapInfo[(file_nr, file_nr_template)]
 
-        # Retrieve the selected cluster ID and gradmap flag
-        # gradmap = self.brain_nav.ui_params['gradmap']
-        gradmap = self.brain_nav.aligned_statMapInfo[(file_nr, self.brain_nav.file_nr_template)]['gradmap_flag']
-        # gradmap = self.brain_nav.fileInfo[file_nr]['gradmap_flag']
+        # Authoritative for THIS pair: written together with overlay_data, by
+        # pyARI.runARI (gradient) and Metrics.update_overlay_image (labels).
+        is_gradient = statmap_entry['gradmap_flag']
+        overlay = statmap_entry['overlay_data']
 
         # Remove existing overlay items
         if self.axial_overlay_item:
@@ -292,115 +318,80 @@ class OrthViewUpdate:
         if self.coronal_overlay_item:
             self.brain_nav.coronal_view.removeItem(self.coronal_overlay_item)
 
-        # overlay = self.brain_nav.statmaps[file_nr]['overlay_data']  # Precomputed overlay data
-        overlay = self.brain_nav.aligned_statMapInfo[(self.brain_nav.file_nr, self.brain_nav.file_nr_template)]['overlay_data']  
-
-        
-        # Create a masked version of the data where voxels outside the mask become NaN.
-        # (If your display logic prefers another “blank” value, you can change np.nan accordingly.)
-        # Retrieve the current image data and its mask
-        tmp_mask= (overlay != 0)
-        overlay = np.where(tmp_mask, overlay, np.nan)
-        
         alpha = self.brain_nav.alpha  # Retrieve transparency level
 
-        if 'img_clus' in self.brain_nav.fileInfo[self.brain_nav.file_nr] and self.brain_nav.fileInfo[self.brain_nav.file_nr]['img_clus'] is not None:
-            
-            # Replace all zeros with NaNs (optional, based on your overlay data)
-            # overlay = np.where(overlay == 0, np.nan, overlay)
-
-            # Generate LUT based on stable LM_ids_count
-            custom_lut_large = self.brain_nav.fileInfo[file_nr]['custom_lut']
-
-            # Index custom_lut using the integer cluster IDs
-            # custom_lut = custom_lut_large[all_cluster_ids_int, :]
-            custom_lut = custom_lut_large 
+        img_clus = self.brain_nav.fileInfo[file_nr].get('img_clus')
+        if img_clus is not None:
+            # .copy() matters: without it the alpha writes below scribble on
+            # fileInfo['custom_lut'] itself, so the stable palette built once
+            # by create_stable_lut was being mutated by every selection.
+            custom_lut = self.brain_nav.fileInfo[file_nr]['custom_lut'].copy()
 
             # Adjust the transparency of non-selected clusters
-            if selected_cluster_id is not None and overlay is not None:
-                # selected_cluster_id += 1
-                
-                # Iterate through the LUT and apply transparency
+            if selected_cluster_id is not None:
                 for i in range(custom_lut.shape[0]):
-                    #  range(1, len(lut))
                     if i == selected_cluster_id:
-                        # custom_lut[i, 3] = int(alpha * 255)  # Full opacity for the selected cluster
                         custom_lut[i, 3] = 255  # Full opacity for the selected cluster
-
                     else:
-                        # custom_lut[i, 3] = int(0.6 * alpha * 255)  # Reduced opacity for non-selected clusters
                         custom_lut[i, 3] = int(0.4 * 255)  # Reduced opacity for non-selected clusters
             else:
                 # Apply the same alpha to all clusters if no cluster is selected
                 custom_lut[:, 3] = int(alpha * 255)
-                #  custom_lut[:, 3] = np.where(np.arange(lut.shape[0]), int(alpha * 255), 0)
-
-            # update the alpha column with currently selected alpha value
-            # custom_lut[:, 3] = int(alpha * 255)
-
-            # Define the background row
-            # background = np.array([0, 0, 0, 0], dtype=custom_lut.dtype)
-
-            # # Insert the background row at the first position (index 0)
-            # custom_lut = np.insert(custom_lut, 0, background, axis=0)
-
-        else:           
-            # overlay = np.where(overlay == 0, np.nan, overlay)
+        else:
             custom_lut = OrthViewUpdate.create_custom_lut(self, colormap='rainbow', alpha=alpha)
-            
-        # Define the background row
+
+        # Row 0 is the background: fully transparent, and the value every
+        # non-brain voxel carries.
         background = np.array([0, 0, 0, 0], dtype=custom_lut.dtype)
-        # Insert the background row at the first position (index 0)
         custom_lut = np.insert(custom_lut, 0, background, axis=0)
 
-        template_data = self.brain_nav.templates[self.brain_nav.file_nr_template]['data'] 
+        template_data = self.brain_nav.templates[self.brain_nav.file_nr_template]['data']
 
         if template_data.flags['C_CONTIGUOUS']:
-            
+            axial_slice    = overlay[:, :, self.brain_nav.axial_slice]
+            sagittal_slice = overlay[self.brain_nav.sagittal_slice, :, :]
+            coronal_slice  = overlay[:, self.brain_nav.coronal_slice, :]
+        else:
+            axial_slice    = overlay[self.brain_nav.axial_slice, :, :]
+            sagittal_slice = overlay[:, :, self.brain_nav.sagittal_slice]
+            coronal_slice  = overlay[:, self.brain_nav.coronal_slice, :]
 
-            if selected_cluster_id is not None or gradmap == False:
-                axial_data      = np.take(custom_lut, np.nan_to_num(overlay[:, :, self.brain_nav.axial_slice], nan=0).astype(int), axis=0)
-                sagittal_data   = np.take(custom_lut, np.nan_to_num(overlay[self.brain_nav.sagittal_slice, :, :], nan=0).astype(int), axis=0)
-                coronal_data    = np.take(custom_lut, np.nan_to_num(overlay[:, self.brain_nav.coronal_slice, :], nan=0).astype(int), axis=0)
-
-                # Create ImageItems with pre-mapped color data (with RGBA values)
-                self.axial_overlay_item = pg.ImageItem(axial_data)
-                self.sagittal_overlay_item = pg.ImageItem(sagittal_data)
-                self.coronal_overlay_item = pg.ImageItem(coronal_data)
-            elif gradmap == True: 
-                 # Use LUT for each slice if no selected cluster is specified
-                # Axial slice
-                self.axial_overlay_item = pg.ImageItem(overlay[:, :, self.brain_nav.axial_slice], lut=custom_lut)
-                # Sagittal slice
-                self.sagittal_overlay_item = pg.ImageItem(overlay[self.brain_nav.sagittal_slice, :, :], lut=custom_lut)
-                # Coronal slice
-                self.coronal_overlay_item = pg.ImageItem(overlay[:, self.brain_nav.coronal_slice, :], lut=custom_lut)
-
-
-        elif template_data.flags['F_CONTIGUOUS']:
-
-            if selected_cluster_id is not None:
-                # For F-order, adjust the slices for each view
-                axial_data = np.take(custom_lut, np.nan_to_num(overlay[self.brain_nav.axial_slice, :, :], nan=0).astype(int), axis=0)
-                sagittal_data = np.take(custom_lut, np.nan_to_num(overlay[:, :, self.brain_nav.sagittal_slice], nan=0).astype(int), axis=0)
-                coronal_data = np.take(custom_lut, np.nan_to_num(overlay[:, self.brain_nav.coronal_slice, :], nan=0).astype(int), axis=0)
-
-                # Create ImageItems with pre-mapped color data (with RGBA values)
-                self.axial_overlay_item = pg.ImageItem(axial_data)
-                self.sagittal_overlay_item = pg.ImageItem(sagittal_data)
-                self.coronal_overlay_item = pg.ImageItem(coronal_data)
-
-            else:
-                # Use LUT for each slice if no selected cluster is specified
-                self.axial_overlay_item = pg.ImageItem(overlay[self.brain_nav.axial_slice, :, :], lut=custom_lut)
-                self.sagittal_overlay_item = pg.ImageItem(overlay[:, :, self.brain_nav.sagittal_slice], lut=custom_lut)
-                self.coronal_overlay_item = pg.ImageItem(overlay[:, self.brain_nav.coronal_slice, :], lut=custom_lut)
+        if is_gradient:
+            # Continuous TDP in [0, 1]. Fixed levels, NOT pyqtgraph's
+            # per-image autodetection: auto levels are computed from the
+            # slice currently on screen, so the identical TDP would take a
+            # different colour on a slice with a different value range.
+            # With (0, 1) the colour of a TDP is absolute — comparable
+            # across slices, templates and statmaps.
+            self.axial_overlay_item    = pg.ImageItem(axial_slice,    lut=custom_lut, levels=(0.0, 1.0))
+            self.sagittal_overlay_item = pg.ImageItem(sagittal_slice, lut=custom_lut, levels=(0.0, 1.0))
+            self.coronal_overlay_item  = pg.ImageItem(coronal_slice,  lut=custom_lut, levels=(0.0, 1.0))
+        else:
+            # Integer cluster labels: pre-map through the LUT ourselves so
+            # cluster N lands on row N regardless of slice content.
+            self.axial_overlay_item    = pg.ImageItem(self._index_through_lut(axial_slice, custom_lut))
+            self.sagittal_overlay_item = pg.ImageItem(self._index_through_lut(sagittal_slice, custom_lut))
+            self.coronal_overlay_item  = pg.ImageItem(self._index_through_lut(coronal_slice, custom_lut))
 
         # Add the overlay items to the views
         self.brain_nav.axial_view.addItem(self.axial_overlay_item)
         self.brain_nav.sagittal_view.addItem(self.sagittal_overlay_item)
         self.brain_nav.coronal_view.addItem(self.coronal_overlay_item)
-            
+
+    @staticmethod
+    def _index_through_lut(slice_2d, lut):
+        """
+        Map a label slice to RGBA by direct LUT index.
+
+        Everything that isn't a valid label collapses to 0 -> the transparent
+        background row: NaN and +-inf (resampling can leave them), negatives,
+        and labels past the end of the LUT. Clipping rather than letting
+        np.take raise keeps one bad voxel from blanking the whole view.
+        """
+        idx = np.nan_to_num(slice_2d, nan=0.0, posinf=0.0, neginf=0.0)
+        idx = np.clip(idx, 0, lut.shape[0] - 1).astype(int)
+        return np.take(lut, idx, axis=0)
+
     def _active_atlas_key(self):
         """
         Returns the userAtlasInfo key for the currently selected template,

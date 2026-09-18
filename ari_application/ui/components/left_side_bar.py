@@ -812,15 +812,12 @@ class LeftSideBar(QWidget):
             # Render the selected cluster in the 3D view
             self.brain_nav.threeDviewer.update_cluster_3d_view(clusLabel=clusID)
             
-            # set the gragmap_flag for this data and template combination to
-            # false — but only when there IS a cluster overlay to switch to.
-            # Clearing it with no cluster image would tell the renderer to
-            # stop drawing the gradient map and draw nothing instead.
-            statmap_entry = self.brain_nav.aligned_statMapInfo.get(
-                (self.brain_nav.file_nr, self.brain_nav.file_nr_template)
-            )
-            if has_cluster_image and statmap_entry is not None:
-                statmap_entry['gradmap_flag'] = False
+            # gradmap_flag is no longer set here: Metrics.update_overlay_image
+            # writes it alongside overlay_data, which is the only moment the
+            # two can be guaranteed consistent. Clearing it here as well was
+            # both redundant and, when no cluster image existed, wrong — it
+            # told the renderer to stop drawing the gradient map without
+            # giving it anything to draw instead.
 
             self.refresh_markers()
             self.brain_nav.message_box.info(
