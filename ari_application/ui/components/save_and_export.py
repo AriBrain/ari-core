@@ -270,6 +270,7 @@ class SaveAndExportTab(QWidget):
 
         bn = self.brain_nav
         bn.userAtlasInfo = {}
+        bn.userAtlasImage = None
 
         if user_atlas_meta:
             path = user_atlas_meta.get('full_path')

@@ -128,6 +128,10 @@ class BrainNav(QMainWindow):
             # template case. Empty until UploadFiles.upload_atlas_dialog
             # runs the loader.
             self.userAtlasInfo = {}
+            # The canonical-reoriented atlas image itself, kept so a statmap
+            # uploaded later can be given its own analysis grid without the
+            # user re-uploading the atlas. Session-only; never pickled.
+            self.userAtlasImage = None
             self.file_nr = 0
             self.file_nr_template = 0
             self.templates = {}
@@ -179,7 +183,8 @@ class BrainNav(QMainWindow):
             self.atlasInfo              = data2load['atlasInfo']
             # Older .ari files predate userAtlasInfo — default to empty so
             # the load path doesn't KeyError on legacy projects.
-            self.userAtlasInfo          = data2load.get('userAtlasInfo', {})
+            self.userAtlasInfo          = {}   # rebuilt by restore_user_atlas_state
+            self.userAtlasImage         = None
             self.file_nr                = data2load['file_nr']
             self.file_nr_template       = data2load['file_nr_template']
             self.data_bg_index          = data2load['data_bg_index']

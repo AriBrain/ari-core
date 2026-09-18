@@ -1989,14 +1989,9 @@ class Metrics:
         file_info = self.brain_nav.fileInfo[file_nr]
         atlas_grid = file_info.get('atlas_on_analysis_grid')
         if atlas_grid is None:
-            # Atlas hasn't been aligned to this statmap's analysis grid —
-            # can happen if the atlas was loaded before this statmap. Ask
-            # the user to re-upload.
-            self.brain_nav.message_box.log_message(
-                "<span style='color: orange;'>Atlas isn't aligned to this "
-                "statmap's analysis grid. Re-upload the atlas after loading "
-                "the statmap.</span>"
-            )
+            # compute_roi_tdps checks this once before the loop and reports
+            # it there; returning quietly here keeps a 120-region atlas from
+            # emitting 120 copies of the same message.
             return np.array([], dtype=np.int32)
 
         indexp_linear = file_info['indexp_linear']
@@ -2153,6 +2148,20 @@ class Metrics:
             self.brain_nav.message_box.log_message(
                 "<span style='color: red;'>ARI hasn't run yet for this "
                 "statmap — cannot compute ROI TDPs.</span>"
+            )
+            return None
+
+        # The atlas must be resampled onto this statmap's analysis grid
+        # before any ROI can be resolved. Normally the loader has already
+        # done it; try once more here (cheap, and it self-heals sessions
+        # loaded from older projects) before giving up.
+        if self.brain_nav.fileInfo[file_nr].get('atlas_on_analysis_grid') is None:
+            self.brain_nav.nifti_loader.align_atlas_to_analysis_grids(file_nr)
+        if self.brain_nav.fileInfo[file_nr].get('atlas_on_analysis_grid') is None:
+            self.brain_nav.message_box.log_message(
+                "<span style='color: orange;'>The atlas could not be aligned "
+                "to this statmap's analysis grid — re-upload the atlas to "
+                "restore ROI analysis for this map.</span>"
             )
             return None
 

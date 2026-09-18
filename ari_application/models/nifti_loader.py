@@ -384,26 +384,8 @@ class NiftiLoader:
         # → indices into fileInfo['data'].T shape). _mask_positions_for_roi
         # then does a direct O(1) lookup instead of walking through the
         # template's aligned_index_data.
-        n_analysis_alignments = 0
-        for file_nr, file_info in self.brain_nav.fileInfo.items():
-            data = file_info.get('data')
-            affine = file_info.get('affine')
-            if data is None or affine is None:
-                continue
-            statmap_ref = nib.Nifti1Image(
-                data, affine=affine, header=file_info.get('header')
-            )
-            aligned_img, _ = ImageProcessing.align_images(
-                statmap_ref, atlas_img, order=0
-            )
-            aligned_data = np.round(aligned_img.get_fdata()).astype(np.int32)
-            # Match the .T applied in Utilities.getPVals so a flat index built
-            # by np.ravel_multi_index(..., order='C') into indexp_linear lines
-            # up with atlas_grid.ravel(order='C').
-            file_info['atlas_on_analysis_grid'] = np.ascontiguousarray(
-                aligned_data.T
-            )
-            n_analysis_alignments += 1
+        self.brain_nav.userAtlasImage = atlas_img
+        n_analysis_alignments = self.align_atlas_to_analysis_grids()
 
         self.brain_nav.message_box.log_message(
             f"<span style='color: lightgreen;'>Atlas loaded: "
@@ -423,6 +405,54 @@ class NiftiLoader:
             )
 
         return True
+
+    def align_atlas_to_analysis_grids(self, file_nr=None):
+        """
+        Resample the loaded user atlas onto the analysis grid of one statmap
+        (`file_nr`) or of every loaded statmap (`file_nr=None`), storing the
+        result as fileInfo[...]['atlas_on_analysis_grid'].
+
+        ROI TDP is computed on the raw data grid — matching the cluster path's
+        philosophy of "run the analysis on the statmap, coregister for
+        display, not the other way round". The `.T` matches the transpose in
+        Utilities.getPVals, so a flat C-order index from indexp_linear lines
+        up with atlas_grid.ravel(order='C') voxel for voxel.
+
+        Called by load_user_atlas for every statmap present at upload, and by
+        check_file_type for each statmap loaded afterwards — without the
+        second call, uploading a statmap after an atlas left that map with no
+        analysis grid and Run silently produced nothing.
+
+        Returns the number of statmaps aligned.
+        """
+        atlas_img = getattr(self.brain_nav, 'userAtlasImage', None)
+        if atlas_img is None:
+            return 0
+
+        if file_nr is None:
+            targets = list(self.brain_nav.fileInfo.items())
+        else:
+            info = self.brain_nav.fileInfo.get(file_nr)
+            targets = [(file_nr, info)] if info is not None else []
+
+        n = 0
+        for _fn, file_info in targets:
+            data = file_info.get('data')
+            affine = file_info.get('affine')
+            if data is None or affine is None:
+                continue
+            statmap_ref = nib.Nifti1Image(
+                data, affine=affine, header=file_info.get('header')
+            )
+            aligned_img, _ = ImageProcessing.align_images(
+                statmap_ref, atlas_img, order=0
+            )
+            aligned_data = np.round(aligned_img.get_fdata()).astype(np.int32)
+            file_info['atlas_on_analysis_grid'] = np.ascontiguousarray(
+                aligned_data.T
+            )
+            n += 1
+        return n
 
     @staticmethod
     def _spatial_space(img):
@@ -816,6 +846,13 @@ class NiftiLoader:
         # fileInfo['type'] = 'z' 
 
         self.brain_nav.fileInfo[file_nr] = fileInfo
+
+        # If a user atlas is already loaded, give this statmap its analysis
+        # grid straight away. Otherwise a statmap uploaded after an atlas
+        # would have no 'atlas_on_analysis_grid' and Run would bail on every
+        # ROI without the user having done anything wrong.
+        if getattr(self.brain_nav, 'userAtlasInfo', None):
+            self.align_atlas_to_analysis_grids(file_nr)
 
     def ask_for_map_type(self, fileInfo):
         # Open a dialog to ask the user to select the map type
