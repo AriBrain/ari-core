@@ -248,6 +248,25 @@ class ResourceList(QListWidget):
         """Every row widget currently installed, in order."""
         return [self.itemWidget(self.item(i)) for i in range(self.count())]
 
+    def set_row_name(self, index, name):
+        """
+        Rename an existing row, updating BOTH the item's text and the row
+        widget on top of it.
+
+        Renaming in place has one caller — the raw-data background entry,
+        which re-points at whichever statmap is active — and it is easy to
+        get half right: the item carries the name that save_project reads
+        back, while the widget carries the name the user sees. Setting only
+        the item leaves a correct .ari file next to a stale label on screen.
+        """
+        item = self.item(index)
+        if item is None:
+            return
+        item.setText(name)
+        widget = self.itemWidget(item)
+        if widget is not None:
+            widget.set_name(name)
+
 
 class Section(QWidget):
     """
@@ -755,9 +774,11 @@ class LeftSideBar(QWidget):
         statmap_index = self.brain_nav.data_bg_index        
         self.brain_nav.templates[statmap_index] = self.brain_nav.statmap_templates[self.brain_nav.file_nr]
 
-        # update the name in the UI list
+        # update the name in the UI list — item text AND row widget, or the
+        # rail keeps showing the previous statmap's filename as the raw-data
+        # background.
         statmap_name = self.brain_nav.templates[statmap_index]['filename']
-        self.template_list.item(statmap_index).setText(statmap_name)
+        self.template_list.set_row_name(statmap_index, statmap_name)
 
     def set_selected_template(self):
         """
