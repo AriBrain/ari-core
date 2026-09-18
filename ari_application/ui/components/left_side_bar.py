@@ -17,6 +17,7 @@ from contextlib import contextmanager
 # these are structural to the sidebar's row/section idiom, not shared chrome.
 # --------------------------------------------------------------------------
 _RAIL_BG        = "#0b1f16"
+_SECTION_BG     = "#122b1f"   # expanded section body, one step up from the rail
 _ROW_ACTIVE_BG  = "#163c2a"
 _ACCENT         = "#7fd1a8"
 _TEXT           = "#dfe6e2"
@@ -155,7 +156,7 @@ class ResourceRow(QWidget):
                 " border: none; background: transparent;"
             )
         self.file_name_label.setColour(_TEXT if self._active else _TEXT_DIM)
-        bg = _ROW_ACTIVE_BG if self._active else _RAIL_BG
+        bg = _ROW_ACTIVE_BG if self._active else _SECTION_BG
         self.setStyleSheet(f"background-color: {bg}; border-radius: 4px;")
 
 
@@ -184,7 +185,7 @@ class ResourceList(QListWidget):
         self.setCursor(Qt.PointingHandCursor)
         self.setStyleSheet(f"""
             QListWidget {{
-                background-color: {_RAIL_BG};
+                background-color: {_SECTION_BG};
                 border: none;
                 outline: none;
                 padding: 0px;
@@ -261,9 +262,10 @@ class Section(QWidget):
 
         layout = QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(2)
+        layout.setSpacing(0)
 
         header = QHBoxLayout()
+        header.setContentsMargins(6, 3, 6, 3)
         header.setContentsMargins(0, 0, 0, 0)
         header.setSpacing(4)
 
@@ -318,9 +320,26 @@ class Section(QWidget):
         header.addWidget(self.count_label)
         header.addWidget(self.add_button)
 
-        layout.addLayout(header)
-        layout.addWidget(self.list)
+        # Header and body are separate widgets so the expanded state can be
+        # signalled by a filled, rounded panel rather than by the arrow
+        # direction alone. Collapsed, the header sits flat on the rail; open,
+        # header and body join into one raised card.
+        self.header_widget = QWidget()
+        self.header_widget.setAttribute(Qt.WA_StyledBackground, True)
+        self.header_widget.setLayout(header)
+
+        self.body = QWidget()
+        self.body.setAttribute(Qt.WA_StyledBackground, True)
+        body_layout = QVBoxLayout()
+        body_layout.setContentsMargins(2, 2, 2, 4)
+        body_layout.setSpacing(0)
+        body_layout.addWidget(self.list)
+        self.body.setLayout(body_layout)
+
+        layout.addWidget(self.header_widget)
+        layout.addWidget(self.body)
         self.setLayout(layout)
+        self._apply_expanded_style(True)
 
         # Take exactly the height we ask for. With the default Preferred
         # policy the rail's spare vertical space was shared out among the
@@ -336,8 +355,37 @@ class Section(QWidget):
         self.refresh_count()
 
     def _on_toggled(self, expanded):
-        self.list.setVisible(expanded)
+        self.body.setVisible(expanded)
         self.toggle.setArrowType(Qt.DownArrow if expanded else Qt.RightArrow)
+        self._apply_expanded_style(expanded)
+
+    def _apply_expanded_style(self, expanded):
+        """
+        Expanded: header and body form one raised, rounded card in
+        _SECTION_BG, with the header squared off at the bottom so the two
+        read as a single block. Collapsed: the header goes flat and
+        transparent and sits directly on the rail.
+        """
+        if expanded:
+            self.header_widget.setStyleSheet(f'''
+                QWidget {{
+                    background-color: {_SECTION_BG};
+                    border-top-left-radius: 6px;
+                    border-top-right-radius: 6px;
+                }}
+            ''')
+            self.body.setStyleSheet(f'''
+                QWidget {{
+                    background-color: {_SECTION_BG};
+                    border-bottom-left-radius: 6px;
+                    border-bottom-right-radius: 6px;
+                }}
+            ''')
+        else:
+            self.header_widget.setStyleSheet(
+                "QWidget { background-color: transparent; border-radius: 6px; }"
+            )
+            self.body.setStyleSheet("QWidget { background: transparent; }")
 
     def refresh_count(self, *args):
         self.count_label.setText(str(self.list.count()))
