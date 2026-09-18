@@ -2073,6 +2073,10 @@ class Metrics:
         progress.show()
 
         hom = self._ensure_hom(file_nr)
+        # One evaluator for the whole loop. hom.discoveries() would redo the
+        # O(m) setup (jump index, Simes factor, sorted p-value list, rank
+        # array) on every ROI; at m~900k that setup is most of the runtime.
+        disc = hom.discovery_context(alpha)
         progress.setValue(1)
 
         rows = []
@@ -2107,10 +2111,9 @@ class Metrics:
                 n_empty += 1
                 continue
 
-            # hom.discoveries returns the cumulative discovery count for
-            # the supplied selector. With incremental=False (default) we
-            # get just the final count for the full set.
-            n_discoveries = hom.discoveries(ix=mask_positions, alpha=alpha)
+            # Final (non-incremental) discovery count for the ROI's voxel
+            # set, straight from the C++ routine via the prepared context.
+            n_discoveries = disc.count(mask_positions)
             tdp = float(n_discoveries) / size
             tdps_per_roi[label_int] = tdp
 

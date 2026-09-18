@@ -156,6 +156,21 @@ class pyHommel:
             return discoveries[1:]
 
 
+    def discovery_context(self, alpha=0.05):
+        """
+        Build a reusable evaluator for many discovery queries at one alpha.
+
+        `discoveries()` recomputes h, the Simes factor, the sorted p-value
+        list and the 1-based rank array on every call — all O(m) and all
+        invariant across queries. When a caller asks the same question for
+        hundreds of voxel sets (ROI-level TDP over an atlas), that setup
+        dominates: measured at m=902,629, 120 ROIs took ~21s through
+        `discoveries()` versus ~4s through this context, for identical values.
+
+        Returns a DiscoveryContext; use `.count(ix)` or `.tdp(ix)` per set.
+        """
+        return DiscoveryContext(self, alpha)
+
     def concentration(self, alpha):
         """
         Calculate the concentration of p-values for a given alpha.
@@ -199,3 +214,76 @@ class pyHommel:
             raise ValueError("BrainNav instance is not set.")
         # Perform operations using self.brain_nav
         print(f"Using BrainNav: {self.brain_nav}")
+
+
+class DiscoveryContext:
+    """
+    Alpha-fixed view over a pyHommel object that hoists every per-query
+    invariant out of the loop, so repeated discovery queries only pay for
+    the C++ call and the per-set rank lookup.
+
+    Built by pyHommel.discovery_context(). Valid only for the p-values and
+    alpha it was built from — rebuild it if either changes.
+    """
+
+    def __init__(self, hom, alpha):
+        p = np.asarray(hom.p)
+        m = len(p)
+
+        self.m = m
+        self.alpha = alpha
+
+        # Invariant across queries: the jump index for this alpha and its
+        # Simes factor.
+        self.h = hommel.py_findHalpha(hom.jump_alpha, alpha, m)
+        self.simes_factor = hom.simes_factor[self.h]
+
+        sorter = np.asarray(hom.sorter)
+
+        # The full ascending p-value list the C++ routine scans. Built once as
+        # a Python list because py_findDiscoveries takes a vector<double>.
+        self.all_sorted_p = p[sorter].tolist()
+
+        # Rank of each hypothesis among the sorted p-values, ONE-BASED: the
+        # C++ side does allp[idx[i] - 1] internally. See
+        # docs/BUG_REPORT_hommel_indexing.md — a 0-based array segfaults when
+        # the smallest p-value is in the selection.
+        rank_1based = np.zeros(m, dtype=int)
+        rank_1based[sorter] = np.arange(1, m + 1)
+        self.rank_1based = rank_1based
+
+        # p is NaN-free by construction (hommel_wbTDP raises on missing
+        # values), so the per-call NaN check discoveries() performs is
+        # redundant here.
+
+    def count(self, ix):
+        """
+        Number of true discoveries in the selection `ix` (0-based indices
+        into the original p-value vector). Returns 0 for an empty selection.
+        """
+        ix = np.asarray(ix)
+        k = int(ix.size)
+        if k == 0:
+            return 0
+
+        discoveries = hommel.py_findDiscoveries(
+            self.rank_1based[ix].tolist(),
+            self.all_sorted_p,
+            self.simes_factor,
+            self.h,
+            self.alpha,
+            k,
+            self.m,
+        )
+        return discoveries[k - 1]
+
+    def tdp(self, ix):
+        """
+        True discovery proportion for the selection `ix`: count / |ix|.
+        Returns 0.0 for an empty selection.
+        """
+        ix = np.asarray(ix)
+        k = int(ix.size)
+        if k == 0:
+            return 0.0
+        return float(self.count(ix)) / k
