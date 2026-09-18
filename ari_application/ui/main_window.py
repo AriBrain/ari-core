@@ -154,7 +154,7 @@ class BrainNav(QMainWindow):
                 'selected_roi_label': None,
                 # Categorical (fixed HSV palette) vs heatmap (viridis of TDP).
                 # Heatmap only available after compute_roi_tdps has built
-                # userAtlasInfo[key]['tdp_lut'].
+                # fileInfo[file_nr]['roi_tdp_lut'] for the active statmap.
                 'atlas_colour_mode': 'categorical',
             }
 

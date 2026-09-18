@@ -335,10 +335,12 @@ class TblROI(QWidget):
         else:
             self.populate_from_codebook(sample.get('codebook') or {})
 
-        # Heatmap toggle only when a TDP LUT exists (analysis was run and
-        # its artifacts were rebuilt on load).
-        has_heat = any(
-            e.get('tdp_lut') is not None for e in bn.userAtlasInfo.values()
+        # Heatmap toggle only when THIS statmap has a TDP LUT (analysis was
+        # run for it and its artifacts were rebuilt on load). Checking the
+        # active statmap rather than "any atlas entry" keeps the toggle honest
+        # when one map has been analysed and another hasn't.
+        has_heat = (
+            bn.fileInfo.get(bn.file_nr, {}).get('roi_tdp_lut') is not None
         )
         self.colour_mode_selector.blockSignals(True)
         mode = bn.ui_params.get('atlas_colour_mode', 'categorical')

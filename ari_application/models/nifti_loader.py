@@ -349,7 +349,6 @@ class NiftiLoader:
                 'codebook': codebook,
                 'lut': lut,
                 'original_affine': atlas_img.affine,
-                'tdps_per_roi': None,
             }
             n_template_alignments += 1
 
@@ -372,7 +371,6 @@ class NiftiLoader:
                 'codebook': codebook,
                 'lut': lut,
                 'original_affine': atlas_img.affine,
-                'tdps_per_roi': None,
             }
             n_template_alignments += 1
 

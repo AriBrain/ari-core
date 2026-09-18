@@ -223,14 +223,17 @@ class ThreeDViewer(QWidget):
                     return
                 overlay_data = atlas_entry['data'].T
                 # Pick the LUT the current colour mode calls for; fall back
-                # to categorical if heatmap is set but tdp_lut isn't built
-                # yet (no analysis run for this atlas). Atlas LUTs are
+                # to categorical if heatmap is set but no TDP LUT has been
+                # built for this statmap yet. The heatmap LUT lives on
+                # fileInfo (per statmap) since TDPs differ per map; the
+                # categorical LUT lives on the atlas entry. Atlas LUTs are
                 # already sized to max(label)+1 with row 0 transparent, so
                 # np.take(lut, clusLabel) works directly without the
                 # background-row insert the cluster path needs.
                 colour_mode = self.brain_nav.ui_params.get('atlas_colour_mode', 'categorical')
-                if colour_mode == 'heatmap' and atlas_entry.get('tdp_lut') is not None:
-                    lut = atlas_entry['tdp_lut'][:, :3]
+                tdp_lut = self.brain_nav.fileInfo.get(file_nr, {}).get('roi_tdp_lut')
+                if colour_mode == 'heatmap' and tdp_lut is not None:
+                    lut = tdp_lut[:, :3]
                 else:
                     lut = atlas_entry['lut'][:, :3]
             else:

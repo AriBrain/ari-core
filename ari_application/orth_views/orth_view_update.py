@@ -438,12 +438,17 @@ class OrthViewUpdate:
         atlas_entry = self.brain_nav.userAtlasInfo[self._active_atlas_key()]
         atlas_vol = atlas_entry['data']
 
-        # Pick the LUT the current colour mode calls for. Fall back to the
-        # categorical LUT if heatmap was requested but tdp_lut hasn't been
-        # built yet (analysis not run).
+        # Pick the LUT the current colour mode calls for. The heatmap LUT
+        # lives on fileInfo (per statmap, because TDPs are a property of the
+        # p-values); the categorical one lives on the atlas entry (per
+        # template). Fall back to categorical if heatmap was requested but no
+        # analysis has run for THIS statmap yet.
         mode = self.brain_nav.ui_params.get('atlas_colour_mode', 'categorical')
-        if mode == 'heatmap' and atlas_entry.get('tdp_lut') is not None:
-            lut = atlas_entry['tdp_lut'].copy()
+        tdp_lut = self.brain_nav.fileInfo.get(
+            self.brain_nav.file_nr, {}
+        ).get('roi_tdp_lut')
+        if mode == 'heatmap' and tdp_lut is not None:
+            lut = tdp_lut.copy()
         else:
             lut = atlas_entry['lut'].copy()
 

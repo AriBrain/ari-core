@@ -2006,9 +2006,16 @@ class Metrics:
     def compute_roi_tdps(self, file_nr, file_nr_template):
         """
         For every ROI in the active user atlas, compute the TDP via
-        Hommel.discoveries and build a results DataFrame. Writes both
-        the per-label dict (userAtlasInfo[atlas_key]['tdps_per_roi'])
-        and the table (fileInfo[file_nr]['tblROI_df']).
+        Hommel.discoveries and build a results DataFrame.
+
+        All three result artifacts land on fileInfo[file_nr]:
+        'roi_tdps' (per-label dict), 'roi_tdp_lut'/'roi_tdp_range' (the
+        heatmap LUT + its auto-range) and 'tblROI_df' (the table). They
+        belong to the STATMAP, not to the atlas: a TDP is a property of
+        the p-values, so it is invariant across display templates but
+        differs per statmap. Keying them off userAtlasInfo (which is keyed
+        by template) made two statmaps sharing one template share one set
+        of TDPs, so switching maps silently showed the other map's numbers.
 
         This is Step 4 of docs/ATLAS_TDP_PLAN.md. Columns ship lean for
         now — ROI / Label / Size / TDP — peak-Z and centroid columns
@@ -2133,7 +2140,7 @@ class Metrics:
                 'Centroid (MNI)': centroid_mni,
             })
 
-        atlas_entry['tdps_per_roi'] = tdps_per_roi
+        self.brain_nav.fileInfo[file_nr]['roi_tdps'] = tdps_per_roi
         # Reset any prior selection — the label set may have changed if the
         # user replaced the atlas between runs.
         self.brain_nav.ui_params['selected_roi_label'] = None
@@ -2163,9 +2170,11 @@ class Metrics:
         # renderer can swap between them without recomputing anything. Auto-
         # range across the ROIs that actually scored: max-contrast within the
         # analysis, at the cost of cross-map comparability.
-        tdp_lut, tdp_range = self._build_atlas_tdp_lut(atlas_entry)
-        atlas_entry['tdp_lut'] = tdp_lut
-        atlas_entry['tdp_range'] = tdp_range
+        tdp_lut, tdp_range = self._build_atlas_tdp_lut(
+            tdps_per_roi, atlas_entry['lut'].shape[0]
+        )
+        self.brain_nav.fileInfo[file_nr]['roi_tdp_lut'] = tdp_lut
+        self.brain_nav.fileInfo[file_nr]['roi_tdp_range'] = tdp_range
 
         # Log a compact preview to the message box so the user can verify
         # the numbers even without opening the ROI Analysis tab. Cap the
@@ -2179,13 +2188,19 @@ class Metrics:
         )
         return tbl
 
-    def _build_atlas_tdp_lut(self, atlas_entry):
+    def _build_atlas_tdp_lut(self, tdps_per_roi, n_rows):
         """
-        Build a heatmap RGBA LUT mirroring the shape of atlas_entry['lut']
-        (same (max_label+1, 4) uint8 contract, row 0 transparent, empty ROIs
-        transparent) but coloured by TDP via viridis. Auto-ranges across the
-        set of ROIs that actually scored so contrast fills the map; the
-        (vmin, vmax) pair is returned for the colourbar legend.
+        Build a heatmap RGBA LUT mirroring the shape of the atlas's
+        categorical LUT (same (max_label+1, 4) uint8 contract, row 0
+        transparent, empty ROIs transparent) but coloured by TDP via viridis.
+        Auto-ranges across the set of ROIs that actually scored so contrast
+        fills the map; the (vmin, vmax) pair is returned for the colourbar
+        legend.
+
+        Takes the per-label TDP dict and the row count directly rather than
+        an atlas entry: the TDPs live on fileInfo (per statmap) while the row
+        count comes from the atlas's categorical LUT (per template), so there
+        is no single dict that holds both.
 
         Degenerate cases:
           - No scoring ROI: return (None, None). Renderer falls back to the
@@ -2198,7 +2213,7 @@ class Metrics:
 
         tdps = {
             int(L): float(v)
-            for L, v in (atlas_entry.get('tdps_per_roi') or {}).items()
+            for L, v in (tdps_per_roi or {}).items()
             if v is not None
         }
         if not tdps:
@@ -2212,7 +2227,6 @@ class Metrics:
             return 0.5 if span < 1e-9 else (v - vmin) / span
 
         cmap = plt.get_cmap('viridis')
-        n_rows = atlas_entry['lut'].shape[0]
         tdp_lut = np.zeros((n_rows, 4), dtype=np.uint8)
         alpha_byte = int(self.brain_nav.alpha * 255)
 

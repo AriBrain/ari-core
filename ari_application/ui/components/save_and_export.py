@@ -13,7 +13,11 @@ import nibabel as nib  # Required for handling NIfTI files
 # or lower (defaults may have been used to fill missing fields).
 # Version 2: slim fileInfo (hom + atlas_on_analysis_grid stripped at save)
 # and the 'user_atlas' metadata key for atlas-based sessions.
-PROJECT_FILE_FORMAT_VERSION = 2
+# Version 3: ROI TDP results moved from userAtlasInfo (keyed by template) to
+# fileInfo (keyed by statmap) as 'roi_tdps' / 'roi_tdp_range'; 'roi_tdp_lut'
+# is stripped at save and rebuilt from tblROI_df on load. Version 2 files
+# still load — the rebuild reads tblROI_df, which both versions persist.
+PROJECT_FILE_FORMAT_VERSION = 3
 
 class SaveAndExportTab(QWidget):
     """
@@ -131,12 +135,14 @@ class SaveAndExportTab(QWidget):
 
             # Slim per-file copies: strip session-only heavyweights that are
             # lazily recomputable — 'hom' (the Hommel object, rebuilt on the
-            # first ROI run) and 'atlas_on_analysis_grid' (rebuilt when the
-            # atlas is re-aligned at load). Shallow copies only; the arrays
-            # we keep are shared, not duplicated.
+            # first ROI run), 'atlas_on_analysis_grid' (rebuilt when the atlas
+            # is re-aligned at load) and 'roi_tdp_lut' (rebuilt from
+            # tblROI_df, which IS saved). Shallow copies only; the arrays we
+            # keep are shared, not duplicated.
             slim_fileInfo = {
                 fn: {k: v for k, v in info.items()
-                     if k not in ('hom', 'atlas_on_analysis_grid')}
+                     if k not in ('hom', 'atlas_on_analysis_grid',
+                                  'roi_tdp_lut')}
                 for fn, info in self.brain_nav.fileInfo.items()
             }
 
@@ -278,26 +284,32 @@ class SaveAndExportTab(QWidget):
                         for entry in bn.userAtlasInfo.values():
                             entry['codebook'] = saved_cb
 
-                    # Rebuild TDP artifacts for the active statmap from the
-                    # persisted results table (TDPs are template-invariant,
-                    # so Label -> TDP from tblROI_df is the full state).
-                    tbl = bn.fileInfo.get(bn.file_nr, {}).get('tblROI_df')
-                    if (
-                        tbl is not None and not getattr(tbl, 'empty', True)
-                        and 'Label' in tbl.columns and 'TDP' in tbl.columns
-                    ):
-                        atlas_key = bn.metrics._resolve_atlas_key(
-                            bn.file_nr, bn.file_nr_template
+                    # Rebuild the TDP artifacts for EVERY statmap that has a
+                    # persisted results table, not just the active one — they
+                    # live on fileInfo per statmap now, so restoring only the
+                    # active map would leave the others showing a categorical
+                    # overlay until they were re-run. Label -> TDP from
+                    # tblROI_df is the full state (TDPs are template-invariant).
+                    sample = next(iter(bn.userAtlasInfo.values()), None)
+                    n_rows = sample['lut'].shape[0] if sample is not None else 0
+                    for info in bn.fileInfo.values():
+                        tbl = info.get('tblROI_df')
+                        if (
+                            tbl is None or getattr(tbl, 'empty', True)
+                            or 'Label' not in tbl.columns
+                            or 'TDP' not in tbl.columns
+                        ):
+                            continue
+                        tdps = {
+                            int(l): float(t)
+                            for l, t in zip(tbl['Label'], tbl['TDP'])
+                        }
+                        info['roi_tdps'] = tdps
+                        tdp_lut, tdp_range = bn.metrics._build_atlas_tdp_lut(
+                            tdps, n_rows
                         )
-                        entry = bn.userAtlasInfo.get(atlas_key)
-                        if entry is not None:
-                            entry['tdps_per_roi'] = {
-                                int(l): float(t)
-                                for l, t in zip(tbl['Label'], tbl['TDP'])
-                            }
-                            tdp_lut, tdp_range = bn.metrics._build_atlas_tdp_lut(entry)
-                            entry['tdp_lut'] = tdp_lut
-                            entry['tdp_range'] = tdp_range
+                        info['roi_tdp_lut'] = tdp_lut
+                        info['roi_tdp_range'] = tdp_range
             else:
                 bn.message_box.log_message(
                     f"<span style='color: orange;'>Saved atlas not found at "
@@ -709,7 +721,9 @@ class SaveAndExportTab(QWidget):
             atlas_entry = next(iter(self.brain_nav.userAtlasInfo.values()), {})
             atlas_name = atlas_entry.get('filename', 'user atlas')
             n_rois = len(atlas_entry.get('codebook') or {})
-            tdp_range = atlas_entry.get('tdp_range')
+            tdp_range = self.fileInfo.get(
+                self.brain_nav.file_nr, {}
+            ).get('roi_tdp_range')
             range_note = (
                 f" TDP heatmap range at export: [{tdp_range[0]:.3f}, {tdp_range[1]:.3f}]."
                 if tdp_range else ""
