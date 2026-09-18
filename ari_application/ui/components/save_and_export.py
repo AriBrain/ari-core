@@ -319,9 +319,10 @@ class SaveAndExportTab(QWidget):
                     f"</span>"
                 )
 
-        # Sync the ROI tab (buttons, count, table, colour toggle) with
-        # whatever state we ended up in.
+        # Sync the ROI tab (buttons, count, table, colour toggle) and the
+        # sidebar's Atlas section with whatever state we ended up in.
         bn.tblROI.restore_from_session()
+        bn.left_side_bar.refresh_atlas_list()
 
         # If the atlas couldn't be restored, an atlas-family overlay mode is
         # no longer honourable — drop back to clusters rather than leaving a

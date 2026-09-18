@@ -212,6 +212,8 @@ class UploadFiles:
         self.brain_nav.tblROI.atlas_codebook_button.setEnabled(True)
         # The explainer has served its purpose — hand its height to the table.
         self.brain_nav.tblROI.collapse_explainer()
+        # The sidebar's Atlas section lists the loaded atlases; keep it honest.
+        self.brain_nav.left_side_bar.refresh_atlas_list()
 
         # ROI count = number of distinct labels in the codebook (auto-filled
         # to include every non-zero label in the atlas, whether or not the
