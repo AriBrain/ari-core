@@ -347,6 +347,11 @@ class LeftSideBar(QWidget):
             # Update the overlay image to match the selected cluster/template
             self.brain_nav.metrics.update_overlay_image(self.brain_nav.file_nr, clusID)
 
+            # Centroids in the ROI table are display-grid voxel coordinates,
+            # so they belong to the template we just left. Rewrite them for
+            # the new one (TDP and Size are grid-independent and stay put).
+            self.brain_nav.metrics.refresh_roi_centroids()
+
             self.brain_nav.orth_view_update.update_crosshairs()
 
             if clusID is not None:

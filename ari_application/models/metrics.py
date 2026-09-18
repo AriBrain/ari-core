@@ -2003,6 +2003,120 @@ class Metrics:
         labels_at_mask = atlas_grid.ravel(order='C')[indexp_linear]
         return np.where(labels_at_mask == int(roi_label))[0].astype(np.int32)
 
+    def _roi_centroids(self, file_nr, file_nr_template):
+        """
+        Centroid voxel of every ROI in the active user atlas, on the CURRENT
+        template's display grid: {label: (cx, cy, cz)}.
+
+        Axis order matches add_atlas_overlay and the crosshair: sagittal = 0,
+        coronal = 1, axial = 2.
+
+        Single vectorised pass (bincount over the non-zero voxels) rather than
+        one np.where per label — for a 900k-voxel volume and a 120-region
+        atlas that is ~120x less work, and it guarantees the table's centroid
+        and follow_roi_xyz's crosshair target are the same number by
+        construction.
+
+        Returns {} when no atlas is loaded for the active view, or when the
+        aligned atlas has no positive labels on this template's grid.
+        """
+        atlas_key = self._resolve_atlas_key(file_nr, file_nr_template)
+        entry = self.brain_nav.userAtlasInfo.get(atlas_key)
+        if entry is None:
+            return {}
+
+        atlas = entry['data']
+        flat = atlas.ravel()
+        # Positive labels only: 0 is background, and a stray negative would
+        # blow up bincount.
+        nz = np.flatnonzero(flat > 0)
+        if nz.size == 0:
+            return {}
+
+        labels = flat[nz].astype(np.int64)
+        n_bins = int(labels.max()) + 1
+        counts = np.bincount(labels, minlength=n_bins)
+        xs, ys, zs = np.unravel_index(nz, atlas.shape)
+        sx = np.bincount(labels, weights=xs, minlength=n_bins)
+        sy = np.bincount(labels, weights=ys, minlength=n_bins)
+        sz = np.bincount(labels, weights=zs, minlength=n_bins)
+
+        centroids = {}
+        for lbl in np.flatnonzero(counts):
+            if lbl == 0:
+                continue
+            n = counts[lbl]
+            centroids[int(lbl)] = (
+                int(round(sx[lbl] / n)),
+                int(round(sy[lbl] / n)),
+                int(round(sz[lbl] / n)),
+            )
+        return centroids
+
+    def _format_centroid(self, coords, rtr_affine):
+        """
+        Render a (cx, cy, cz) display-grid centroid as the pair of strings the
+        ROI table shows: voxel coordinates and their MNI equivalent. MNI is
+        'N/A' when the template affine isn't available yet.
+        """
+        cx, cy, cz = coords
+        vox = f"({cx}, {cy}, {cz})"
+        if rtr_affine is None:
+            return vox, 'N/A'
+        mni = self.xyz2MNI(np.array([cx, cy, cz]), rtr_affine)
+        return vox, (
+            f"({int(round(mni[0]))}, "
+            f"{int(round(mni[1]))}, "
+            f"{int(round(mni[2]))})"
+        )
+
+    def refresh_roi_centroids(self):
+        """
+        Rewrite the two centroid columns of the active statmap's tblROI_df for
+        the template that is now selected, and push the result to the table.
+
+        Centroids are the one part of the ROI results that IS template-
+        dependent: they are voxel coordinates on the display grid. TDP and
+        Size are computed on the statmap's own grid and stay put. Without this
+        the table kept showing the previous template's voxel coordinates after
+        a switch, in the UI and in every export built from the DataFrame.
+
+        Called by LeftSideBar.set_selected_template. No-op when no atlas or no
+        results are loaded.
+        """
+        bn = self.brain_nav
+        file_nr = bn.file_nr
+        file_nr_template = bn.file_nr_template
+
+        tbl = bn.fileInfo.get(file_nr, {}).get('tblROI_df')
+        if tbl is None or getattr(tbl, 'empty', True) or 'Label' not in tbl.columns:
+            return
+
+        centroids = self._roi_centroids(file_nr, file_nr_template)
+        if not centroids:
+            return
+
+        rtr_affine = bn.aligned_templateInfo.get(
+            (file_nr, file_nr_template), {}
+        ).get('rtr_template_affine')
+
+        vox_col, mni_col = [], []
+        for label in tbl['Label']:
+            coords = centroids.get(int(label))
+            if coords is None:
+                # Label absent from this template's aligned atlas — keep the
+                # row (its TDP is still valid) but don't invent a position.
+                vox_col.append('N/A')
+                mni_col.append('N/A')
+                continue
+            vox, mni = self._format_centroid(coords, rtr_affine)
+            vox_col.append(vox)
+            mni_col.append(mni)
+
+        tbl['Centroid (vox)'] = vox_col
+        tbl['Centroid (MNI)'] = mni_col
+        bn.tblROI.update_table(tbl)
+
     def compute_roi_tdps(self, file_nr, file_nr_template):
         """
         For every ROI in the active user atlas, compute the TDP via
@@ -2043,7 +2157,6 @@ class Metrics:
             return None
 
         atlas_entry = self.brain_nav.userAtlasInfo[atlas_key]
-        atlas = atlas_entry['data']
         codebook = atlas_entry['codebook']
         alpha = self.brain_nav.input['alpha']
 
@@ -2054,6 +2167,11 @@ class Metrics:
             (file_nr, file_nr_template), {}
         )
         rtr_affine = template_info.get('rtr_template_affine')
+
+        # Centroids for every label in one vectorised pass. Doubles as the
+        # "does this label exist on the current template's grid?" test, which
+        # used to be a separate np.where per label.
+        centroids = self._roi_centroids(file_nr, file_nr_template)
 
         # Progress dialog: one step per ROI plus one step for the Hommel
         # decomposition (only runs the first time; still counted so the bar
@@ -2096,8 +2214,9 @@ class Metrics:
             )
             progress.setValue(step)
             label_int = int(label)
-            roi_indices = np.where(atlas == label_int)
-            if roi_indices[0].size == 0:
+            coords = centroids.get(label_int)
+            if coords is None:
+                # Codebook names a label the aligned atlas doesn't contain.
                 tdps_per_roi[label_int] = None
                 n_empty += 1
                 continue
@@ -2119,20 +2238,9 @@ class Metrics:
 
             # Centroid in template UI space (axes match sagittal/coronal/
             # axial as used by add_atlas_overlay + follow_roi_xyz).
-            cx = int(round(roi_indices[0].mean()))
-            cy = int(round(roi_indices[1].mean()))
-            cz = int(round(roi_indices[2].mean()))
-            centroid_vox = f"({cx}, {cy}, {cz})"
-
-            if rtr_affine is not None:
-                mni = self.xyz2MNI(np.array([cx, cy, cz]), rtr_affine)
-                centroid_mni = (
-                    f"({int(round(mni[0]))}, "
-                    f"{int(round(mni[1]))}, "
-                    f"{int(round(mni[2]))})"
-                )
-            else:
-                centroid_mni = 'N/A'
+            # Template-dependent, unlike TDP and Size — refresh_roi_centroids
+            # rewrites these two columns when the template changes.
+            centroid_vox, centroid_mni = self._format_centroid(coords, rtr_affine)
 
             rows.append({
                 'ROI': name,
@@ -2381,9 +2489,8 @@ class Metrics:
         if atlas_key not in self.brain_nav.userAtlasInfo:
             return
 
-        atlas = self.brain_nav.userAtlasInfo[atlas_key]['data']
-        roi_indices = np.where(atlas == int(roi_label))
-        if roi_indices[0].size == 0:
+        coords = self._roi_centroids(file_nr, file_nr_template).get(int(roi_label))
+        if coords is None:
             self.brain_nav.message_box.log_message(
                 f"<span style='color: orange;'>ROI {int(roi_label)} has no "
                 f"voxels in the current template — cannot focus.</span>"
@@ -2391,13 +2498,11 @@ class Metrics:
             return
 
         if move_crosshair:
-            # Centroid, rounded to int voxel coordinates. Axis order matches
-            # the cluster overlay path: sagittal = x = axis 0, coronal = y =
-            # axis 1, axial = z = axis 2, matching how add_atlas_overlay
-            # indexes into the same array.
-            cx = int(round(roi_indices[0].mean()))
-            cy = int(round(roi_indices[1].mean()))
-            cz = int(round(roi_indices[2].mean()))
+            # Same helper the table's Centroid column comes from, so the
+            # crosshair always lands on the coordinates the row displays.
+            # Axis order matches the cluster overlay path: sagittal = axis 0,
+            # coronal = axis 1, axial = axis 2.
+            cx, cy, cz = coords
 
             self.brain_nav.sagittal_slice = cx
             self.brain_nav.coronal_slice = cy
