@@ -290,12 +290,18 @@ class OrthViewUpdate:
         while the flag still said gradient, and only the first-thresholded
         template ever had its flag cleared.
 
-        Non-brain / non-cluster voxels are encoded as plain 0 in both modes
-        and row 0 of the LUT is the fully transparent background row, so the
-        background is handled identically whichever mapping is in play. The
-        old NaN round-trip (write NaN, then nan_to_num it straight back to 0)
-        only existed to steer pyqtgraph's automatic level detection, which we
-        no longer rely on.
+        Background handling differs between the two, because the data does:
+
+        - Label maps really do use 0 for "no cluster", so row 0 of the LUT
+          being fully transparent covers it.
+        - The gradient map has no 0 background at all. fileInfo['mask'] is
+          ~isnan(data), which for a statmap with no NaNs is every voxel in
+          the volume, so the cluster tree spans the whole FOV and every voxel
+          comes out at or above the whole-brain TDP bound. Measured on the
+          project's own test map: 0 voxels at exactly 0, and 71.5% of the
+          volume sitting on the floor value, all of it outside the brain.
+          Those floor voxels are the plateau that must not be painted — see
+          _gradient_levels.
         """
 
         if selected_cluster_id is not None:
@@ -357,15 +363,10 @@ class OrthViewUpdate:
             coronal_slice  = overlay[:, self.brain_nav.coronal_slice, :]
 
         if is_gradient:
-            # Continuous TDP in [0, 1]. Fixed levels, NOT pyqtgraph's
-            # per-image autodetection: auto levels are computed from the
-            # slice currently on screen, so the identical TDP would take a
-            # different colour on a slice with a different value range.
-            # With (0, 1) the colour of a TDP is absolute — comparable
-            # across slices, templates and statmaps.
-            self.axial_overlay_item    = pg.ImageItem(axial_slice,    lut=custom_lut, levels=(0.0, 1.0))
-            self.sagittal_overlay_item = pg.ImageItem(sagittal_slice, lut=custom_lut, levels=(0.0, 1.0))
-            self.coronal_overlay_item  = pg.ImageItem(coronal_slice,  lut=custom_lut, levels=(0.0, 1.0))
+            levels = self._gradient_levels(file_nr)
+            self.axial_overlay_item    = pg.ImageItem(axial_slice,    lut=custom_lut, levels=levels)
+            self.sagittal_overlay_item = pg.ImageItem(sagittal_slice, lut=custom_lut, levels=levels)
+            self.coronal_overlay_item  = pg.ImageItem(coronal_slice,  lut=custom_lut, levels=levels)
         else:
             # Integer cluster labels: pre-map through the LUT ourselves so
             # cluster N lands on row N regardless of slice content.
@@ -377,6 +378,37 @@ class OrthViewUpdate:
         self.brain_nav.axial_view.addItem(self.axial_overlay_item)
         self.brain_nav.sagittal_view.addItem(self.sagittal_overlay_item)
         self.brain_nav.coronal_view.addItem(self.coronal_overlay_item)
+
+    def _gradient_levels(self, file_nr):
+        """
+        Colour levels for the TDP gradient map: (mintdp, 1.0).
+
+        The low anchor is the whole-brain TDP bound, not 0, and that is what
+        makes the non-brain plateau disappear. Because the analysis mask is
+        ~isnan(data) — every voxel when the statmap has no NaNs — the cluster
+        tree covers the whole field of view and every voxel ends up at or
+        above that bound. The floor is the largest gamma step <= mintdp, so
+        anchoring the scale at mintdp puts the entire plateau on LUT row 0,
+        which is transparent. Anything genuinely localised sits above it and
+        keeps its colour.
+
+        This is what pyqtgraph's automatic levels were achieving by accident:
+        with the background NaN'd out, the auto minimum landed on the
+        smallest non-zero value, i.e. the floor. The difference is that auto
+        levels are recomputed from whatever slice is on screen, so the same
+        TDP drew in different colours on different slices. mintdp is a
+        constant of the statmap, so the mapping is stable while scrolling and
+        across templates.
+
+        Semantically the hidden voxels are the ones carrying no localised
+        evidence: all the whole-brain bound says is "TDP >= mintdp
+        everywhere", which is true by construction and not a finding.
+
+        Falls back to 0.0 when mintdp is absent (ARI not run yet), which just
+        means nothing is suppressed.
+        """
+        mintdp = self.brain_nav.fileInfo.get(file_nr, {}).get('mintdp')
+        return (float(mintdp) if mintdp is not None else 0.0, 1.0)
 
     @staticmethod
     def _index_through_lut(slice_2d, lut):
