@@ -89,7 +89,10 @@ class ResourceRow(QWidget):
         layout.setSpacing(6)
 
         self.dot = QLabel("\u25cb" if show_dot else "")
-        self.dot.setFixedWidth(10)
+        # 14, not 10: the hollow circle is wider than the filled one and was
+        # being clipped on its right side, rendering as a "C".
+        self.dot.setFixedWidth(14)
+        self.dot.setAlignment(Qt.AlignCenter)
         self.dot.setStyleSheet(f"color: {_TEXT_DIM}; border: none; background: transparent;")
         layout.addWidget(self.dot)
 
@@ -318,6 +321,14 @@ class Section(QWidget):
         layout.addLayout(header)
         layout.addWidget(self.list)
         self.setLayout(layout)
+
+        # Take exactly the height we ask for. With the default Preferred
+        # policy the rail's spare vertical space was shared out among the
+        # three sections, which then padded it between their own header and
+        # list — a one-row section rendered with its single row floating in
+        # the middle of a tall empty box. All slack belongs to the stretch at
+        # the bottom of the rail.
+        self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
 
         self.list.model().rowsInserted.connect(self.refresh_count)
         self.list.model().rowsRemoved.connect(self.refresh_count)
@@ -765,8 +776,18 @@ class LeftSideBar(QWidget):
             # Remap the xyz coordinates from old to new template ui space
             self.brain_nav.UIHelp.remap_ui_xyz(self.brain_nav.file_nr, xyz_prev, file_nr_template_prev, self.brain_nav.file_nr_template)
 
-            # Update the overlay image to match the selected cluster/template
-            self.brain_nav.metrics.update_overlay_image(self.brain_nav.file_nr, clusID)
+            # update_overlay_image re-aligns fileInfo['img_clus'] onto the new
+            # template. Before any thresholding has run there is no cluster
+            # image at all — the viewer is showing the gradient map — and this
+            # raised KeyError: 'img_clus'. The branch above already recognises
+            # that state for the table; the overlay and the gradmap flag below
+            # need the same treatment.
+            has_cluster_image = (
+                self.brain_nav.fileInfo[self.brain_nav.file_nr].get('img_clus')
+                is not None
+            )
+            if has_cluster_image:
+                self.brain_nav.metrics.update_overlay_image(self.brain_nav.file_nr, clusID)
 
             # Centroids in the ROI table are display-grid voxel coordinates,
             # so they belong to the template we just left. Rewrite them for
@@ -791,8 +812,15 @@ class LeftSideBar(QWidget):
             # Render the selected cluster in the 3D view
             self.brain_nav.threeDviewer.update_cluster_3d_view(clusLabel=clusID)
             
-            # set the gragmap_flag for this data and template combination to false.
-            self.brain_nav.aligned_statMapInfo[(self.brain_nav.file_nr, self.brain_nav.file_nr_template)]['gradmap_flag'] = False
+            # set the gragmap_flag for this data and template combination to
+            # false — but only when there IS a cluster overlay to switch to.
+            # Clearing it with no cluster image would tell the renderer to
+            # stop drawing the gradient map and draw nothing instead.
+            statmap_entry = self.brain_nav.aligned_statMapInfo.get(
+                (self.brain_nav.file_nr, self.brain_nav.file_nr_template)
+            )
+            if has_cluster_image and statmap_entry is not None:
+                statmap_entry['gradmap_flag'] = False
 
             self.refresh_markers()
             self.brain_nav.message_box.info(
