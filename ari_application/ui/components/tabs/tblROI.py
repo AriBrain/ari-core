@@ -11,7 +11,7 @@ mode and focus the crosshair on the selected ROI's centroid.
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
     QTextEdit, QTableWidget, QTableWidgetItem, QHeaderView,
-    QAbstractItemView, QComboBox,
+    QAbstractItemView, QComboBox, QToolButton,
 )
 from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt
@@ -55,7 +55,16 @@ class TblROI(QWidget):
 
     def init_table(self):
         """
-        Build the tab contents: explainer -> operating panel -> table.
+        Build the tab contents:
+            title -> collapsible explainer -> operating panel
+                  -> crosshair readout -> results table.
+
+        Vertical budget: the explainer collapses to a 24px header once an
+        atlas is loaded (it is first-run guidance, not a working surface),
+        which more than pays for the 30px crosshair strip. The table is the
+        only expanding widget, so it absorbs the difference — nothing else
+        compresses and nothing is pushed out of the tab.
+
         Returns the container widget for QTabWidget.addTab.
         """
         self._container = QWidget()
@@ -66,21 +75,185 @@ class TblROI(QWidget):
         title.setAlignment(Qt.AlignLeft)
         title.setStyleSheet("padding: 5px;")
 
-        explainer = QTextEdit()
-        explainer.setReadOnly(True)
-        # HTML so the warning can be bolded inline.
-        explainer.setHtml(_ROI_ANALYSIS_EXPLAINER)
-        # A bit taller than the old 60px so the appended standard-space
-        # warning isn't clipped.
-        explainer.setFixedHeight(120)
-
         outer.addWidget(title)
-        outer.addWidget(explainer)
+        outer.addLayout(self._build_explainer())
         outer.addLayout(self._build_operating_panel())
+        outer.addWidget(self._build_crosshair_readout())
         outer.addWidget(self._build_table())
 
         self._container.setLayout(outer)
         return self._container
+
+    # ------------------------------------------------------------------
+    # Collapsible explainer
+    # ------------------------------------------------------------------
+
+    def _build_explainer(self):
+        """
+        The standing explanation, behind a disclosure header.
+
+        It matters exactly once — before the first atlas upload — but it was
+        holding 120px permanently, on the most vertically constrained tab in
+        the app. Expanded by default so a first-time user still reads it;
+        collapsed automatically once an atlas loads, and re-openable any time.
+        """
+        box = QVBoxLayout()
+        box.setSpacing(2)
+        box.setContentsMargins(0, 0, 0, 0)
+
+        self.explainer_toggle = QToolButton()
+        self.explainer_toggle.setText("About ROI analysis")
+        self.explainer_toggle.setCheckable(True)
+        self.explainer_toggle.setChecked(True)
+        self.explainer_toggle.setArrowType(Qt.DownArrow)
+        self.explainer_toggle.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        self.explainer_toggle.setCursor(Qt.PointingHandCursor)
+        self.explainer_toggle.setStyleSheet("""
+            QToolButton {
+                border: none;
+                color: #9aa0a6;
+                font-size: 11pt;
+                padding: 2px 4px;
+                text-align: left;
+            }
+            QToolButton:hover { color: #dddddd; }
+        """)
+        self.explainer_toggle.toggled.connect(self._on_explainer_toggled)
+
+        self.explainer = QTextEdit()
+        self.explainer.setReadOnly(True)
+        # HTML so the warning can be bolded inline.
+        self.explainer.setHtml(_ROI_ANALYSIS_EXPLAINER)
+        # A bit taller than the old 60px so the appended standard-space
+        # warning isn't clipped.
+        self.explainer.setFixedHeight(120)
+
+        box.addWidget(self.explainer_toggle)
+        box.addWidget(self.explainer)
+        return box
+
+    def _on_explainer_toggled(self, expanded):
+        self.explainer.setVisible(expanded)
+        self.explainer_toggle.setArrowType(
+            Qt.DownArrow if expanded else Qt.RightArrow
+        )
+
+    def collapse_explainer(self):
+        """
+        Fold the explainer away — called once an atlas is loaded, when the
+        guidance has served its purpose and the table wants the height.
+        No-op if the user already collapsed it.
+        """
+        if getattr(self, 'explainer_toggle', None) is not None:
+            self.explainer_toggle.setChecked(False)
+
+    # ------------------------------------------------------------------
+    # Crosshair readout
+    # ------------------------------------------------------------------
+
+    def _build_crosshair_readout(self):
+        """
+        Single-line live readout of the ROI under the crosshair: name, label,
+        TDP and MNI position.
+
+        The workstation metrics panel can't serve this: it lives inside the
+        Whole Brain TDP tab's layout, so it is off-screen whenever the user is
+        on this tab — which is precisely when they are navigating an atlas.
+        Fixed height so it can never wrap and push the table down.
+        """
+        self.crosshair_readout = QLabel()
+        self.crosshair_readout.setTextFormat(Qt.RichText)
+        self.crosshair_readout.setFixedHeight(30)
+        self.crosshair_readout.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
+        self.crosshair_readout.setStyleSheet("""
+            QLabel {
+                background-color: #111;
+                color: #dddddd;
+                padding: 2px 10px;
+                border-radius: 6px;
+                border: 1px solid #444;
+                font-size: 11pt;
+            }
+        """)
+        self._set_crosshair_placeholder()
+        return self.crosshair_readout
+
+    def _set_crosshair_placeholder(self, text="Upload an atlas to inspect regions under the crosshair"):
+        self.crosshair_readout.setText(
+            f"<span style='color:#777;'>{text}</span>"
+        )
+
+    def update_crosshair_readout(self):
+        """
+        Refresh the readout for the current crosshair position. Driven from
+        Metrics.show_metrics, which already runs on every crosshair move, so
+        the line tracks mouse drags without a second signal path.
+
+        Shows the ROI's TDP for the ACTIVE statmap (results are per-statmap),
+        and an em-dash when the analysis hasn't been run for it yet. In TDP
+        heatmap mode the value is tinted with the same viridis colour the
+        overlay uses, so the number and the region on screen read as one
+        thing.
+        """
+        if getattr(self, 'crosshair_readout', None) is None:
+            return
+
+        bn = self.brain_nav
+        atlas_key = bn.orth_view_update._active_atlas_key()
+        entry = bn.userAtlasInfo.get(atlas_key)
+        if entry is None:
+            self._set_crosshair_placeholder()
+            return
+
+        atlas = entry['data']
+        x, y, z = bn.sagittal_slice, bn.coronal_slice, bn.axial_slice
+        if not (0 <= x < atlas.shape[0]
+                and 0 <= y < atlas.shape[1]
+                and 0 <= z < atlas.shape[2]):
+            self._set_crosshair_placeholder("Crosshair is outside the atlas volume")
+            return
+
+        label = int(atlas[x, y, z])
+        if label <= 0:
+            self._set_crosshair_placeholder("No ROI at the crosshair")
+            return
+
+        name = (entry.get('codebook') or {}).get(label, f"ROI {label}")
+        info = bn.fileInfo.get(bn.file_nr, {})
+        tdp = (info.get('roi_tdps') or {}).get(label)
+
+        if tdp is None:
+            tdp_html = "<span style='color:#777;'>&mdash;</span>"
+        else:
+            colour = '#dddddd'
+            lut = info.get('roi_tdp_lut')
+            if (
+                bn.ui_params.get('atlas_colour_mode') == 'heatmap'
+                and lut is not None and label < lut.shape[0]
+            ):
+                r, g, b = (int(c) for c in lut[label][:3])
+                colour = f"#{r:02x}{g:02x}{b:02x}"
+            tdp_html = f"<b style='color:{colour};'>{tdp:.3f}</b>"
+
+        mni_html = ""
+        rtr_affine = bn.aligned_templateInfo.get(
+            (bn.file_nr, bn.file_nr_template), {}
+        ).get('rtr_template_affine')
+        if rtr_affine is not None:
+            import numpy as np
+            mni = bn.metrics.xyz2MNI(np.array([x, y, z]), rtr_affine)
+            mni_html = (
+                "<span style='color:#888;'>&nbsp;&nbsp;MNI</span> "
+                f"({int(mni[0])}, {int(mni[1])}, {int(mni[2])})"
+            )
+
+        self.crosshair_readout.setText(
+            f"<span style='color:#888;'>Crosshair &rarr;</span> "
+            f"<b>{name}</b> "
+            f"<span style='color:#888;'>(label {label})</span>"
+            f"<span style='color:#888;'>&nbsp;&nbsp;TDP</span> {tdp_html}"
+            f"{mni_html}"
+        )
 
     # ------------------------------------------------------------------
     # Operating panel: Upload Atlas / Upload Codebook / ROI count / Run
@@ -179,6 +352,7 @@ class TblROI(QWidget):
         mode = 'heatmap' if self.colour_mode_selector.currentText() == 'TDP heatmap' else 'categorical'
         self.brain_nav.ui_params['atlas_colour_mode'] = mode
         self.brain_nav.orth_view_update.update_slices()
+        self.update_crosshair_readout()
         selected = self.brain_nav.ui_params.get('selected_roi_label')
         if selected is not None:
             self.brain_nav.threeDviewer.update_cluster_3d_view(int(selected))
@@ -317,6 +491,11 @@ class TblROI(QWidget):
         self.atlas_codebook_button.setEnabled(has_atlas)
         self.atlas_run_button.setEnabled(has_atlas)
 
+        if has_atlas:
+            # Guidance already served; give the height to the table.
+            self.collapse_explainer()
+        self.update_crosshair_readout()
+
         if not has_atlas:
             self.set_roi_count(None)
             self.colour_mode_selector.blockSignals(True)
@@ -387,6 +566,7 @@ class TblROI(QWidget):
             bn.threeDviewer.update_cluster_3d_view(
                 int(selected) if selected is not None else None
             )
+        self.update_crosshair_readout()
 
     def select_roi_row(self, roi_label):
         """

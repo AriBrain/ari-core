@@ -210,6 +210,8 @@ class UploadFiles:
         self.brain_nav.ui_params['overlay_mode'] = 'atlas'
         self.brain_nav.tblROI.atlas_run_button.setEnabled(True)
         self.brain_nav.tblROI.atlas_codebook_button.setEnabled(True)
+        # The explainer has served its purpose — hand its height to the table.
+        self.brain_nav.tblROI.collapse_explainer()
 
         # ROI count = number of distinct labels in the codebook (auto-filled
         # to include every non-zero label in the atlas, whether or not the

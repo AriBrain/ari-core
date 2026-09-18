@@ -100,6 +100,32 @@ class Metrics:
                 self.brain_nav.message_box.debug(f"Failed to retrieve atlas region: {e}")
                 atlas_region_name = 'None'
 
+        # Same readout for the user-uploaded atlas, when there is one. Without
+        # it the panel names an AAL2 region while the orthviews are showing a
+        # completely different atlas.
+        user_region = None
+        user_atlas_key = self.brain_nav.orth_view_update._active_atlas_key()
+        user_entry = self.brain_nav.userAtlasInfo.get(user_atlas_key)
+        if user_entry is not None:
+            try:
+                user_label = int(user_entry['data'][x, y, z])
+                if user_label > 0:
+                    name = (user_entry.get('codebook') or {}).get(
+                        user_label, f"ROI {user_label}"
+                    )
+                    tdp = (
+                        BrainNav.fileInfo.get(file_nr, {}).get('roi_tdps') or {}
+                    ).get(user_label)
+                    user_region = (
+                        f"{name} (TDP={tdp:.3f})" if tdp is not None else name
+                    )
+                else:
+                    user_region = 'None'
+            except Exception:
+                # Crosshair outside the atlas grid; stay silent, this runs on
+                # every mouse move.
+                user_region = 'None'
+
         # Metrics when data is available
         try:
             # dims = BrainNav.statmaps[file_nr]['overlay_header'].get_data_shape()
@@ -137,10 +163,20 @@ class Metrics:
             'Cluster': voxel_value,  # Add data value to the metrics
             'Region (AAL2)': atlas_region_name
         }
+        if user_region is not None:
+            metrics['Region (user atlas)'] = user_region
 
         
         region = metrics['Region (AAL2)']
         region_color = "#0f0" if region != "None" and region != "Undefined" else "#f44"
+
+        user_atlas_row = ""
+        if user_region is not None:
+            user_color = "#0f0" if user_region != "None" else "#f44"
+            user_atlas_row = (
+                '<tr><td><b>Region (user atlas):</b></td>'
+                f'<td><span style="color:{user_color}">{user_region}</span></td></tr>'
+            )
 
         metrics_text = f"""
                 <table cellspacing="6" cellpadding="2">
@@ -152,12 +188,20 @@ class Metrics:
                 <tr><td colspan="2"><hr></td></tr>
                 <tr><td><b>Cluster ID:</b></td>       <td>{metrics['Cluster']}</td></tr>
                 <tr><td><b>Region (AAL2):</b></td>    <td><span style="color:{region_color}">{region}</span></td></tr>
+                {user_atlas_row}
                 </table>
             """
             # BrainNav.metrics_label.setText(metrics_text)
 
         # metrics_text = '\n'.join([f"{key}: {value}" for key, value in metrics.items()])
         BrainNav.initiate_tabs.metrics_label.setText(metrics_text)
+
+        # The panel above lives inside the Whole Brain TDP tab's layout, so it
+        # is off-screen whenever the user is on the ROI tab. Mirror the live
+        # ROI line onto that tab's own readout.
+        tblROI = getattr(BrainNav, 'tblROI', None)
+        if tblROI is not None:
+            tblROI.update_crosshair_readout()
     
 
     def control_transparency(self, value):
