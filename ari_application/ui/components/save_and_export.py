@@ -429,21 +429,41 @@ class SaveAndExportTab(QWidget):
           roi_tdp_map_*.nii.gz    — each ROI's voxels valued by its TDP
                                     (float32; 0 = background / unscored)
 
+        Both are restricted to the voxels that entered the analysis — the
+        brain-mask positions indexp_linear points at. A TDP is a statement
+        about the hypotheses that were tested, so painting it onto ROI voxels
+        that carried no p-value would attribute a bound to voxels it was never
+        computed over, and would make a voxel count taken from the NIfTI
+        disagree with the 'Size (vox)' column beside it.
+
         Uses fileInfo['atlas_on_analysis_grid'] (the analysis-grid atlas);
         transposed back to canonical orientation for saving, exactly like the
         img_clus export.
         """
         from os.path import join
+        import numpy as np
 
         for i, file_nr in enumerate(self.fileInfo):
             info = self.fileInfo[file_nr]
             atlas_grid = info.get('atlas_on_analysis_grid')
+            indexp_linear = info.get('indexp_linear')
             df = info.get('tblROI_df')
-            if atlas_grid is None or df is None or getattr(df, 'empty', True):
+            if (
+                atlas_grid is None or indexp_linear is None
+                or df is None or getattr(df, 'empty', True)
+            ):
                 continue
 
             fn = info.get('filename', f'file{file_nr}')
-            atlas_canonical = atlas_grid.T.copy()  # analysis grid -> canonical
+
+            # Labels at the analysed voxels only; everything else stays 0.
+            in_mask_labels = atlas_grid.ravel(order='C')[indexp_linear]
+            labels_flat = np.zeros(atlas_grid.size, dtype=np.int32)
+            labels_flat[indexp_linear] = in_mask_labels
+            # analysis grid -> canonical
+            atlas_canonical = np.ascontiguousarray(
+                labels_flat.reshape(atlas_grid.shape).T
+            )
 
             # 1) Label map
             atlas_image = nib.Nifti1Image(
@@ -451,22 +471,38 @@ class SaveAndExportTab(QWidget):
                 affine=info['affine'],
                 header=info['header'],
             )
+            atlas_image.set_data_dtype(np.int32)
             label_path = join(output_dir, f"roi_atlas_map_{fn}_{i+1}.nii.gz")
             nib.save(atlas_image, label_path)
             self.brain_nav.message_box.log_message(f"ROI atlas map saved: {label_path}")
 
             # 2) TDP map — derived from the persisted results table so it
-            # works even right after a project load.
-            import numpy as np
-            tdp_map = np.zeros(atlas_canonical.shape, dtype=np.float32)
+            # works even right after a project load. Label -> TDP through a
+            # lookup array rather than one full-volume comparison per region.
+            n_rows = int(in_mask_labels.max()) + 1 if in_mask_labels.size else 1
+            lookup = np.zeros(n_rows, dtype=np.float32)
             for label, tdp in zip(df['Label'], df['TDP']):
-                tdp_map[atlas_canonical == int(label)] = float(tdp)
+                label = int(label)
+                if 0 < label < n_rows:
+                    lookup[label] = float(tdp)
+
+            tdp_flat = np.zeros(atlas_grid.size, dtype=np.float32)
+            tdp_flat[indexp_linear] = lookup[
+                np.clip(in_mask_labels, 0, n_rows - 1)
+            ]
+            tdp_canonical = np.ascontiguousarray(
+                tdp_flat.reshape(atlas_grid.shape).T
+            )
 
             tdp_image = nib.Nifti1Image(
-                tdp_map,
+                tdp_canonical,
                 affine=info['affine'],
                 header=info['header'],
             )
+            # Pin float32 explicitly: inherited headers carry the statmap's
+            # datatype, and a TDP in [0, 1] written through an integer dtype
+            # would survive only on nibabel's scaling round-trip.
+            tdp_image.set_data_dtype(np.float32)
             tdp_path = join(output_dir, f"roi_tdp_map_{fn}_{i+1}.nii.gz")
             nib.save(tdp_image, tdp_path)
             self.brain_nav.message_box.log_message(f"ROI TDP map saved: {tdp_path}")
