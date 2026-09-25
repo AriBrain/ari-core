@@ -3,6 +3,8 @@ import pyqtgraph as pg
 from matplotlib.colors import ListedColormap
 from pyqtgraph import TextItem
 
+from ari_application.models.nifti_loader import NiftiLoader
+
 class OrthViewUpdate:
     def __init__(self, BrainNaV):
         """
@@ -308,11 +310,9 @@ class OrthViewUpdate:
         - Label maps really do use 0 for "no cluster", so row 0 of the LUT
           being fully transparent covers it.
         - The gradient map is 0 outside the analysis mask, which row 0 also
-          covers. But every voxel INSIDE the mask comes out at or above the
-          whole-brain TDP bound, so the map has a floor plateau that must not
-          be painted — see _gradient_levels. (Projects saved before the mask
-          excluded zero voxels have that plateau across the whole field of
-          view instead.)
+          covers, so it is drawn at fixed levels (0, 1). The exception is
+          projects saved with the old NaN-only mask, whose background sits on
+          a non-zero plateau instead of 0 — see _gradient_levels.
         """
 
         if selected_cluster_id is not None:
@@ -392,38 +392,36 @@ class OrthViewUpdate:
 
     def _gradient_levels(self, file_nr):
         """
-        Colour levels for the TDP gradient map: (mintdp, 1.0).
+        Colour levels for the TDP gradient map. Fixed levels either way — never
+        pyqtgraph's per-slice auto levels, which drew the same TDP in different
+        colours on different slices.
 
-        The low anchor is the whole-brain TDP bound, not 0. The whole analysis
-        mask forms one cluster at that bound, so every in-mask voxel ends up at
-        or above it; the floor is the largest gamma step <= mintdp. Anchoring
-        the scale at mintdp puts that floor plateau on LUT row 0, which is
-        transparent, while anything genuinely localised sits above it and
-        keeps its colour. On z.nii the plateau is over a quarter of the brain.
+        (0, 1) — the normal case, and what the R ARIbrain app used
+        (zlim = c(0, 1)). Outside the analysis mask the gradient map is exactly
+        0, which lands on the transparent LUT row; every in-mask voxel is
+        coloured by its TDP, including voxels whose only evidence is weak.
 
-        This stays necessary with the non-zero analysis mask: excluding the
-        zero background moves the plateau from outside the brain to inside
-        it, rather than removing it. Projects saved with the old NaN-only mask
-        still carry a plateau across the whole field of view, and this hides
-        both.
+        (mintdp, 1) — legacy masks only. Projects analysed with the old
+        NaN-only mask put the whole volume, background included, into the
+        analysis, so the background sits on a plateau just below the
+        whole-brain TDP bound instead of at 0. Anchoring at mintdp puts that
+        plateau on the transparent row; at (0, 1) it painted the field of view
+        purple.
 
-        This is what pyqtgraph's automatic levels were achieving by accident:
-        with the background NaN'd out, the auto minimum landed on the
-        smallest non-zero value, i.e. the floor. The difference is that auto
-        levels are recomputed from whatever slice is on screen, so the same
-        TDP drew in different colours on different slices. mintdp is a
-        constant of the statmap, so the mapping is stable while scrolling and
-        across templates.
+        Do not use the mintdp anchor with a real mask. There the brain has
+        voxels below the whole-brain bound — regions with weaker evidence than
+        the brain as a whole — and the anchor blanks them: 29% of the brain on
+        z.nii, 28% on bart_Accept. That is also what the original auto-level
+        code did once the mask excluded zeros, which is plausibly why the
+        `& (data != 0)` had been commented out.
 
-        Semantically the hidden voxels are the ones carrying no localised
-        evidence: all the whole-brain bound says is "TDP >= mintdp
-        everywhere", which is true by construction and not a finding.
-
-        Falls back to 0.0 when mintdp is absent (ARI not run yet), which just
-        means nothing is suppressed.
+        Falls back to (0, 1) for a legacy mask when mintdp is absent.
         """
-        mintdp = self.brain_nav.fileInfo.get(file_nr, {}).get('mintdp')
-        return (float(mintdp) if mintdp is not None else 0.0, 1.0)
+        info = self.brain_nav.fileInfo.get(file_nr, {})
+        if NiftiLoader.mask_source_of(info).get('kind') == 'legacy':
+            mintdp = info.get('mintdp')
+            return (float(mintdp) if mintdp is not None else 0.0, 1.0)
+        return (0.0, 1.0)
 
     @staticmethod
     def _index_through_lut(slice_2d, lut):
