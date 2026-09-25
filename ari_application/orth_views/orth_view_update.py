@@ -110,27 +110,24 @@ class OrthViewUpdate:
         
         # Check if the data is in C-order or F-order - should always be C-order as it is forced in rotate method
         # Update the views using the masked data.
+        # Clamp to the volume on both sides: a crosshair from a different grid
+        # can be past the end, and a negative index would silently wrap round
+        # to the opposite edge of the brain.
+        def clamp(i, axis):
+            return int(min(max(i, 0), masked_data.shape[axis] - 1))
+
         if data.flags['C_CONTIGUOUS']:
-            # # For C-contiguous data:
-            # self.brain_nav.axial_view.setImage(masked_data[:, :, self.brain_nav.axial_slice])
-            # self.brain_nav.sagittal_view.setImage(masked_data[self.brain_nav.sagittal_slice, :, :])
-            # self.brain_nav.coronal_view.setImage(masked_data[:, self.brain_nav.coronal_slice, :])
+            axial_slice    = masked_data[:, :, clamp(self.brain_nav.axial_slice, 2)]
+            sagittal_slice = masked_data[clamp(self.brain_nav.sagittal_slice, 0), :, :]
+            coronal_slice  = masked_data[:, clamp(self.brain_nav.coronal_slice, 1), :]
+        else:
+            axial_slice    = masked_data[clamp(self.brain_nav.axial_slice, 0), :, :]
+            sagittal_slice = masked_data[:, :, clamp(self.brain_nav.sagittal_slice, 2)]
+            coronal_slice  = masked_data[:, clamp(self.brain_nav.coronal_slice, 1), :]
 
-            # Ensure slice indices are within bounds
-            axial_slice = min(self.brain_nav.axial_slice, masked_data.shape[2] - 1)
-            sagittal_slice = min(self.brain_nav.sagittal_slice, masked_data.shape[0] - 1)
-            coronal_slice = min(self.brain_nav.coronal_slice, masked_data.shape[1] - 1)
-
-            # For C-contiguous data:
-            self.brain_nav.axial_view.setImage(masked_data[:, :, axial_slice])
-            self.brain_nav.sagittal_view.setImage(masked_data[sagittal_slice, :, :])
-            self.brain_nav.coronal_view.setImage(masked_data[:, coronal_slice, :])
-
-        elif data.flags['F_CONTIGUOUS']:
-            # For F-contiguous data:
-            self.brain_nav.axial_view.setImage(masked_data[self.brain_nav.axial_slice, :, :])
-            self.brain_nav.sagittal_view.setImage(masked_data[:, :, self.brain_nav.sagittal_slice])
-            self.brain_nav.coronal_view.setImage(masked_data[:, self.brain_nav.coronal_slice, :])
+        self.brain_nav.axial_view.setImage(self._displayable(axial_slice))
+        self.brain_nav.sagittal_view.setImage(self._displayable(sagittal_slice))
+        self.brain_nav.coronal_view.setImage(self._displayable(coronal_slice))
 
         # Set the ranges for the views
         # This ensures that the view ranges are updated to reflect any changes in the displayed slices.
@@ -267,6 +264,22 @@ class OrthViewUpdate:
         self.update_crosshairs()
         self.brain_nav.UIHelp.update_ui_xyz()
 
+
+    @staticmethod
+    def _displayable(slice_2d):
+        """
+        A background slice pyqtgraph can render.
+
+        Empty background voxels are NaN here, so a slice that misses the
+        brain entirely is all-NaN. ImageView derives its display range from
+        nanmin/nanmax of the slice, gets NaN, and raises "Cannot set range
+        [nan, nan]" — which took down tab switches on maps with empty edge
+        slices (bart_Accept has 16 sagittal ones). An all-zero slice renders
+        as the same black background and gives a valid (0, 0) range.
+        """
+        if np.isfinite(slice_2d).any():
+            return slice_2d
+        return np.zeros_like(slice_2d)
 
     def add_overlay_with_transparency(self, selected_cluster_id=None):
         """

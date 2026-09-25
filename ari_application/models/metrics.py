@@ -2426,11 +2426,15 @@ class Metrics:
             self.brain_nav.coronal_slice,
             self.brain_nav.axial_slice,
         )
+        # Slice indices only mean something on the grid they were taken on,
+        # which depends on both the statmap and the background template.
+        grid = (self.brain_nav.file_nr, self.brain_nav.file_nr_template)
         if group == 'cluster':
             ui['cluster_view_context'] = {
                 'selected_cluster_id': ui.get('selected_cluster_id'),
                 'selected_row': ui.get('selected_row'),
                 'crosshair': crosshair,
+                'grid': grid,
             }
         elif group == 'roi':
             mode = ui.get('overlay_mode')
@@ -2441,11 +2445,26 @@ class Metrics:
                 # default the next visit to the verification overlay.
                 'overlay_mode': mode if mode in ('atlas', 'roi') else 'atlas',
                 'crosshair': crosshair,
+                'grid': grid,
             }
 
     def _apply_saved_crosshair(self, ctx):
-        """Restore the crosshair slices from a saved view context, if any."""
+        """
+        Restore the crosshair slices from a saved view context — but only if
+        it was saved on the grid now on screen (same statmap and template).
+
+        Otherwise the current crosshair is left alone. Slice indices from one
+        grid are meaningless on another: a sagittal position saved on the
+        91-wide MNI grid was clamped onto an empty edge slice of a 65-wide
+        statmap background, and that empty slice crashed the viewer. Contexts
+        saved before this check (no 'grid') are treated as unknown and not
+        restored.
+        """
         crosshair = ctx.get('crosshair')
+        grid_now = (self.brain_nav.file_nr, self.brain_nav.file_nr_template)
+        saved_grid = ctx.get('grid')
+        if saved_grid is None or tuple(saved_grid) != grid_now:
+            return
         if crosshair is not None and len(crosshair) == 3:
             self.brain_nav.sagittal_slice = int(crosshair[0])
             self.brain_nav.coronal_slice = int(crosshair[1])
