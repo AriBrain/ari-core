@@ -247,6 +247,11 @@ class SaveAndExportTab(QWidget):
             # lingering in-session atlas from before the load is cleared.
             self.restore_user_atlas_state(project_data.get('user_atlas'))
 
+            # The loaded statmaps carry their own mask_source; the session's
+            # uploaded-mask list belongs to the project being replaced.
+            self.brain_nav.userMasks = []
+            self.brain_nav.left_side_bar.refresh_mask_list()
+
             self.brain_nav.UIHelp.refresh_ui()
             self.brain_nav.message_box.info(
                 f"Project loaded: {file_name} "

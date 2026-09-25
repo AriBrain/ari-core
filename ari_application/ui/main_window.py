@@ -132,6 +132,9 @@ class BrainNav(QMainWindow):
             # uploaded later can be given its own analysis grid without the
             # user re-uploading the atlas. Session-only; never pickled.
             self.userAtlasImage = None
+            # Analysis masks uploaded this session (UploadFiles.upload_mask_dialog).
+            # Which mask each statmap uses lives on fileInfo[file_nr]['mask_source'].
+            self.userMasks = []
             self.file_nr = 0
             self.file_nr_template = 0
             self.templates = {}
@@ -185,6 +188,9 @@ class BrainNav(QMainWindow):
             # the load path doesn't KeyError on legacy projects.
             self.userAtlasInfo          = {}   # rebuilt by restore_user_atlas_state
             self.userAtlasImage         = None
+            # Session list only; the masks the loaded statmaps were analysed with
+            # are recovered from their fileInfo['mask_source'] by the sidebar.
+            self.userMasks              = []
             self.file_nr                = data2load['file_nr']
             self.file_nr_template       = data2load['file_nr_template']
             self.data_bg_index          = data2load['data_bg_index']
@@ -273,6 +279,7 @@ class BrainNav(QMainWindow):
         self.left_side_bar.stat_image_add_clicked.connect(self.upload_files.upload_stat_image)
         self.left_side_bar.template_add_clicked.connect(self.upload_files.upload_template_dialog)
         self.left_side_bar.atlas_add_clicked.connect(self.upload_files.upload_atlas_dialog)
+        self.left_side_bar.mask_add_clicked.connect(self.upload_files.upload_mask_dialog)
 
         self.init_panes()       # Creates left_container & right_container contained in outer_layout 
         # self.menu_bar.init_menu()        # Creates menu bar
