@@ -6,6 +6,7 @@ from itertools import chain
 import numpy as np
 import pandas as pd
 import nibabel as nib
+import pyqtgraph as pg
 from scipy.stats import norm
 import scipy.spatial.distance as distance
 import scipy.cluster.hierarchy as hierarchy
@@ -152,49 +153,9 @@ class Metrics:
             voxelsize = 'None'
             MNI_xyzs = 'None'
 
-        metrics = {
-            # 'Dimensions': BrainNav.image.header.get_data_shape(),
-            # 'Voxel Size': BrainNav.image.header.get_zooms(),
-            'Dimensions': dims,
-            'Voxel Size': voxelsize,
-            # 'Data Type': BrainNav.image.header.get_data_dtype(),
-            'Cross Hair (xyz)': (x, y, z),
-            'MNI (xyz)': MNI_xyzs,
-            'Cluster': voxel_value,  # Add data value to the metrics
-            'Region (AAL2)': atlas_region_name
-        }
-        if user_region is not None:
-            metrics['Region (user atlas)'] = user_region
-
-        
-        region = metrics['Region (AAL2)']
-        region_color = "#0f0" if region != "None" and region != "Undefined" else "#f44"
-
-        user_atlas_row = ""
-        if user_region is not None:
-            user_color = "#0f0" if user_region != "None" else "#f44"
-            user_atlas_row = (
-                '<tr><td><b>Region (user atlas):</b></td>'
-                f'<td><span style="color:{user_color}">{user_region}</span></td></tr>'
-            )
-
-        metrics_text = f"""
-                <table cellspacing="6" cellpadding="2">
-                <tr><td><b>Dimensions:</b></td>       <td>{metrics['Dimensions']}</td></tr>
-                <tr><td><b>Voxel Size:</b></td>       <td>{metrics['Voxel Size']}</td></tr>
-                <tr><td colspan="2"><hr></td></tr>
-                <tr><td><b>Cross Hair (xyz):</b></td> <td>{metrics['Cross Hair (xyz)']}</td></tr>
-                <tr><td><b>MNI (xyz):</b></td>        <td>{metrics['MNI (xyz)']}</td></tr>
-                <tr><td colspan="2"><hr></td></tr>
-                <tr><td><b>Cluster ID:</b></td>       <td>{metrics['Cluster']}</td></tr>
-                <tr><td><b>Region (AAL2):</b></td>    <td><span style="color:{region_color}">{region}</span></td></tr>
-                {user_atlas_row}
-                </table>
-            """
-            # BrainNav.metrics_label.setText(metrics_text)
-
-        # metrics_text = '\n'.join([f"{key}: {value}" for key, value in metrics.items()])
-        BrainNav.initiate_tabs.metrics_label.setText(metrics_text)
+        BrainNav.initiate_tabs.metrics_label.setText(self._info_panel_html(
+            (x, y, z), MNI_xyzs, atlas_region_name, user_region,
+        ))
 
         # The panel above lives inside the Whole Brain TDP tab's layout, so it
         # is off-screen whenever the user is on the ROI tab. Mirror the live
@@ -203,6 +164,184 @@ class Metrics:
         if tblROI is not None:
             tblROI.update_crosshair_readout()
     
+
+    # ------------------------------------------------------------------
+    # Whole Brain TDP tab: crosshair info panel
+    # ------------------------------------------------------------------
+
+    _PANEL_KEY = "#8a9a92"
+    _PANEL_VALUE = "#dfe6e2"
+    _PANEL_DIM = "#6f7d76"
+
+    def _crosshair_tdp(self, x, y, z):
+        """
+        The TDP to show for the voxel under the crosshair, and what it means.
+
+        Before thresholding the orthviews show the gradient map, so this is the
+        VOXEL TDP: the highest TDP of any cluster that contains the voxel (its
+        gradient-map value). After thresholding (TDP- or z-based) it is the
+        CLUSTER TDP of the cluster under the crosshair, looked up in the
+        cluster table by the cluster's Unique ID, which is what img_clus
+        stores.
+
+        Returns a dict: label, value (float or None), detail (one line of
+        context, or the reason there is no value) and colour (hex matching the
+        overlay, or None).
+        """
+        bn = self.brain_nav
+        file_nr, file_nr_template = bn.file_nr, bn.file_nr_template
+        info = bn.fileInfo.get(file_nr, {})
+        stat = bn.aligned_statMapInfo.get((file_nr, file_nr_template), {})
+        tpl = bn.aligned_templateInfo.get((file_nr, file_nr_template), {})
+
+        clustered = (stat.get('gradmap_flag') is False
+                     and info.get('img_clus') is not None)
+        result = {'label': 'Cluster TDP' if clustered else 'Voxel TDP',
+                  'value': None, 'detail': '', 'colour': None}
+
+        if info.get('grad_map') is None:
+            result['detail'] = "ARI has not run for this map yet"
+            return result
+
+        # Crosshair (display grid) -> statmap voxel on the analysis grid.
+        # mapped_coordinate_matrix_C holds (0, 0, 0) for positions with no
+        # statmap voxel, which is also a real voxel, so test the aligned index
+        # image first: it is non-zero exactly inside the statmap's field of view.
+        idx, mapped = tpl.get('aligned_index_data'), tpl.get('mapped_coordinate_matrix_C')
+        if (idx is None or mapped is None
+                or not all(0 <= c < n for c, n in zip((x, y, z), idx.shape))
+                or not idx[x, y, z] > 0):
+            result['detail'] = "outside the statistical map"
+            return result
+        xr, yr, zr = (int(c) for c in mapped[x, y, z])
+
+        if not info['mask'].T[xr, yr, zr]:
+            result['detail'] = "not analysed — outside the analysis mask"
+            return result
+
+        if not clustered:
+            tdp = float(info['grad_map'].T[xr, yr, zr])
+            result.update(value=tdp, colour=self._gradient_colour(file_nr, tdp),
+                          detail="highest TDP of any cluster containing this voxel")
+            return result
+
+        uid = info['img_clus'][xr, yr, zr]
+        if not np.isfinite(uid) or uid <= 0:
+            result['detail'] = "not in a cluster at the current threshold"
+            return result
+        tbl = info.get('tblARI_df')
+        row = tbl[tbl['Unique ID'] == int(uid)] if tbl is not None else None
+        if row is None or row.empty:
+            result['detail'] = "cluster not found in the cluster table"
+            return result
+        row = row.iloc[0]
+        result.update(
+            value=float(row['TDP']),
+            detail=f"cluster {int(row['Cluster'])} · {int(row['Size']):,} voxels",
+        )
+        lut = info.get('custom_lut')
+        if lut is not None and 0 < int(uid) <= lut.shape[0]:
+            r, g, b = (int(c) for c in lut[int(uid) - 1][:3])
+            result['colour'] = f"#{r:02x}{g:02x}{b:02x}"
+        return result
+
+    def _gradient_colour(self, file_nr, tdp):
+        """
+        The colour the orthviews give this TDP in the gradient map, so the
+        panel's swatch matches the overlay. Uses the renderer's own levels;
+        None when the value falls below them (drawn transparent).
+        """
+        lo, hi = self.brain_nav.orth_view_update._gradient_levels(file_nr)
+        if not tdp > lo:
+            return None
+        if getattr(self, '_rainbow_lut', None) is None:
+            self._rainbow_lut = pg.colormap.get('rainbow', source='matplotlib').getLookupTable(alpha=False)
+        lut = self._rainbow_lut
+        i = int(np.clip((tdp - lo) / (hi - lo) * (lut.shape[0] - 1), 0, lut.shape[0] - 1))
+        r, g, b = (int(c) for c in lut[i][:3])
+        return f"#{r:02x}{g:02x}{b:02x}"
+
+    def _info_panel_html(self, xyz, mni, aal_region, user_region):
+        """
+        Rich-text body of the Whole Brain TDP tab's info panel: a TDP headline
+        for the voxel under the crosshair, then position and anatomy, then the
+        statistical map itself.
+
+        The Dimensions / Voxel size shown here describe the STATMAP. They used
+        to be read from the aligned overlay header, i.e. the background
+        template's grid — 197 x 233 x 189 @ 1 mm for a 3 x 3 x 4 mm map.
+        """
+        bn = self.brain_nav
+        info = bn.fileInfo.get(bn.file_nr, {})
+        K, V, DIM = self._PANEL_KEY, self._PANEL_VALUE, self._PANEL_DIM
+
+        def fmt_xyz(v):
+            try:
+                return ", ".join(f"{int(c)}".replace("-", "−") for c in v)
+            except Exception:
+                return "—"
+
+        def region(name):
+            if not name or name in ('None', 'Undefined'):
+                return f"<span style='color:{DIM}'>—</span>"
+            return name
+
+        # --- headline: TDP -------------------------------------------------
+        t = self._crosshair_tdp(*xyz)
+        if t['value'] is None:
+            value_html = f"<span style='color:{DIM}'>—</span>"
+        else:
+            swatch = (f"<span style='color:{t['colour']}'>●</span>&nbsp;"
+                      if t['colour'] else "")
+            value_html = f"{swatch}{t['value']:.2f}"
+        headline = (
+            "<table width='100%' cellspacing='0' cellpadding='0'><tr>"
+            f"<td valign='middle'>"
+            f"<span style='color:{K}; font-size:9pt; font-weight:600'>"
+            f"{t['label'].upper()}</span><br>"
+            f"<span style='color:{DIM}; font-size:9pt'>{t['detail']}</span></td>"
+            f"<td align='right' valign='middle' style='font-size:20pt; font-weight:600; "
+            f"color:{V}'>{value_html}</td>"
+            "</tr></table>"
+        )
+
+        # --- position & anatomy --------------------------------------------
+        def kv(k1, v1, k2="", v2=""):
+            return (f"<tr><td style='color:{K}' width='18%'>{k1}</td>"
+                    f"<td style='color:{V}' width='37%'>{v1}</td>"
+                    f"<td style='color:{K}' width='15%'>{k2}</td>"
+                    f"<td style='color:{V}'>{v2}</td></tr>")
+
+        rows = kv("Voxel", fmt_xyz(xyz), "MNI", fmt_xyz(mni))
+        rows += kv("Region", region(aal_region), "Atlas", "AAL2")
+        if user_region is not None:
+            rows += kv("ROI", region(user_region), "Atlas", "user")
+
+        # --- the statistical map -------------------------------------------
+        data = info.get('data')
+        mask = info.get('mask')
+        header = info.get('header')
+        stat_bits = []
+        type_label = {'z': 'z-map', 't': 't-map', 'p': 'p-map', 'f': 'F-map'}.get(info.get('type'))
+        if type_label:
+            stat_bits.append(type_label)
+        if data is not None:
+            stat_bits.append(" × ".join(str(n) for n in data.shape))
+        if header is not None:
+            zooms = header.get_zooms()[:3]
+            stat_bits.append(" × ".join(f"{float(v):g}" for v in zooms) + " mm")
+        if mask is not None:
+            stat_bits.append(f"{int(mask.sum()):,} voxels analysed")
+        stat_line = (f"<span style='color:{K}'>Statmap</span>&nbsp;&nbsp;"
+                     f"<span style='color:{V}'>{' · '.join(stat_bits)}</span>")
+
+        rule = f"<tr><td colspan='4' style='border-top:1px solid #2a3a32'></td></tr>"
+        return (
+            f"{headline}"
+            f"<table width='100%' cellspacing='0' cellpadding='3' style='margin-top:8px'>"
+            f"{rule}{rows}{rule}</table>"
+            f"<div style='margin-top:4px; font-size:10pt'>{stat_line}</div>"
+        )
 
     def control_transparency(self, value):
         # Transform reveived signal to alpha value between 0-1
