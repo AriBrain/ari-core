@@ -782,9 +782,16 @@ class NiftiLoader:
         # tr_image = ImageProcessing.transpose_image(data)
         # fileInfo['data'] = tr_image.get_fdata()
 
-        # Set mask based on valid data values
-        fileInfo['mask'] = ~np.isnan(fileInfo['data']) #& (fileInfo['data'] != 0)
-        # fileInfo['mask'] = (fileInfo['data'] != 0)
+        # Analysis mask: voxels that are neither NaN nor exactly zero. This is
+        # the R ARIbrain app's autoMask rule (menu2.R), and reproduces R's
+        # in-mask voxel set exactly. Most packages (FSL, SPM) write 0 outside
+        # the brain rather than NaN, so a NaN-only mask selected the whole
+        # volume: ~70-80% of every analysis was empty space entered as p=1
+        # hypotheses, inflating m and weakening every TDP bound (z.nii:
+        # whole-brain TDP 0.0439 with NaN-only, 0.1978 with this rule). For a
+        # p-map with a zero-filled background it was worse: those voxels
+        # entered as p=0 and overstated results. See docs/MASKING_FIX_PLAN.md.
+        fileInfo['mask'] = ~np.isnan(fileInfo['data']) & (fileInfo['data'] != 0)
 
         # transposed_affine = tr_image.affine
         # print("Updated affine after reordering axes:\n", transposed_affine)

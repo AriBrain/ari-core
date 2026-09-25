@@ -294,14 +294,12 @@ class OrthViewUpdate:
 
         - Label maps really do use 0 for "no cluster", so row 0 of the LUT
           being fully transparent covers it.
-        - The gradient map has no 0 background at all. fileInfo['mask'] is
-          ~isnan(data), which for a statmap with no NaNs is every voxel in
-          the volume, so the cluster tree spans the whole FOV and every voxel
-          comes out at or above the whole-brain TDP bound. Measured on the
-          project's own test map: 0 voxels at exactly 0, and 71.5% of the
-          volume sitting on the floor value, all of it outside the brain.
-          Those floor voxels are the plateau that must not be painted — see
-          _gradient_levels.
+        - The gradient map is 0 outside the analysis mask, which row 0 also
+          covers. But every voxel INSIDE the mask comes out at or above the
+          whole-brain TDP bound, so the map has a floor plateau that must not
+          be painted — see _gradient_levels. (Projects saved before the mask
+          excluded zero voxels have that plateau across the whole field of
+          view instead.)
         """
 
         if selected_cluster_id is not None:
@@ -383,14 +381,18 @@ class OrthViewUpdate:
         """
         Colour levels for the TDP gradient map: (mintdp, 1.0).
 
-        The low anchor is the whole-brain TDP bound, not 0, and that is what
-        makes the non-brain plateau disappear. Because the analysis mask is
-        ~isnan(data) — every voxel when the statmap has no NaNs — the cluster
-        tree covers the whole field of view and every voxel ends up at or
-        above that bound. The floor is the largest gamma step <= mintdp, so
-        anchoring the scale at mintdp puts the entire plateau on LUT row 0,
-        which is transparent. Anything genuinely localised sits above it and
-        keeps its colour.
+        The low anchor is the whole-brain TDP bound, not 0. The whole analysis
+        mask forms one cluster at that bound, so every in-mask voxel ends up at
+        or above it; the floor is the largest gamma step <= mintdp. Anchoring
+        the scale at mintdp puts that floor plateau on LUT row 0, which is
+        transparent, while anything genuinely localised sits above it and
+        keeps its colour. On z.nii the plateau is over a quarter of the brain.
+
+        This stays necessary with the non-zero analysis mask: excluding the
+        zero background moves the plateau from outside the brain to inside
+        it, rather than removing it. Projects saved with the old NaN-only mask
+        still carry a plateau across the whole field of view, and this hides
+        both.
 
         This is what pyqtgraph's automatic levels were achieving by accident:
         with the background NaN'd out, the auto minimum landed on the
