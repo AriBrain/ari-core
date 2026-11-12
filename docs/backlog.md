@@ -83,10 +83,15 @@ Reported November 2026.
 - **The masking work was not tested in the real 3D viewer.** Offscreen test runs replace it with a stand-in, because it needs an OpenGL context.
 - **`docs/MASKING_FIX_PLAN.md` is out of date.** It describes an earlier, broader plan.
 
-### Cluster decompositions on z.nii differ slightly from R
+### `pip install -e .` fails: setup.py reads a deleted requirements.txt
 
-- **Symptom:** whole-brain numbers match R, but cluster decompositions on z.nii do not.
-- **Two competing explanations; check both before fixing:**
-  - **Tie order:** the app reorients LAS to RAS before analysis, which changes the order of tied p-values. Run in the file's native orientation, the app matches R exactly.
-  - **`forestTDP` sorting:** `forestTDP`/`heavyPathTDP` pass p-values to `findDiscoveries` in voxel order, but it expects them sorted. An earlier investigation found that this, not ties, causes the orientation dependence, and that with sorted input the clusters are identical across orientations.
-- **Status:** a fix for the `forestTDP` issue is being brought in from a collaborator's repository; re-test this item after it lands.
+- **Symptom:** `pip install -e .`, the documented way to rebuild the Cython extensions, stops with `FileNotFoundError: requirements.txt`.
+- **Cause:** the standalone-build PR (#5) deleted `requirements.txt`, but `setup.py` still opens it for `install_requires`. The dependencies now live in `pyproject.toml` (`[project] dependencies`).
+- **Workaround:** build the extensions in place with the same `Extension` definitions as `setup.py` and `build_ext --inplace`.
+- **Fix idea:** drop the `requirements.txt` read and `install_requires` from `setup.py`, so the dependency list in `pyproject.toml` is the only one.
+
+### `pyHommel.concentration` returns the next p-value
+
+- **Symptom:** the concentration threshold (`conc_thres` in `runARI`, shown as `z_conc`) is one p-value too high in the sorted list.
+- **Cause:** `findConcentration` returns z as a 1-based count, and R's `hommel::concentration` returns `sortedp[z]`, the z-th smallest p-value. The Python port returns `sorted_p[z]`, which with 0-based indexing is the (z+1)-th.
+- **Fix idea:** return `sorted_p[z - 1]`, and guard z = 0.
