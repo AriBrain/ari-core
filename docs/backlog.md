@@ -83,13 +83,6 @@ Reported November 2026.
 - **The masking work was not tested in the real 3D viewer.** Offscreen test runs replace it with a stand-in, because it needs an OpenGL context.
 - **`docs/MASKING_FIX_PLAN.md` is out of date.** It describes an earlier, broader plan.
 
-### `pip install -e .` fails: setup.py reads a deleted requirements.txt
-
-- **Symptom:** `pip install -e .`, the documented way to rebuild the Cython extensions, stops with `FileNotFoundError: requirements.txt`.
-- **Cause:** the standalone-build PR (#5) deleted `requirements.txt`, but `setup.py` still opens it for `install_requires`. The dependencies now live in `pyproject.toml` (`[project] dependencies`).
-- **Workaround:** build the extensions in place with the same `Extension` definitions as `setup.py` and `build_ext --inplace`.
-- **Fix idea:** drop the `requirements.txt` read and `install_requires` from `setup.py`, so the dependency list in `pyproject.toml` is the only one.
-
 ### `pyHommel.concentration` returns the next p-value
 
 - **Symptom:** the concentration threshold (`conc_thres` in `runARI`, shown as `z_conc`) is one p-value too high in the sorted list.
