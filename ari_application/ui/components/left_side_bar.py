@@ -829,7 +829,7 @@ class LeftSideBar(QWidget):
                 if response == QMessageBox.Ok:
                     self.set_selected_template()
                 else:
-                    self.brain_nav.file_nr = prev_file_nr
+                    self._revert_statmap_switch(prev_file_nr)
                     return
 
             if gradmap is True and not clusterlist_exists:
@@ -851,8 +851,12 @@ class LeftSideBar(QWidget):
                     self.brain_nav.WBTing.update_threshold_label(float(self.brain_nav.WBTing.tdp_textbox1.text()))
                 elif clicked_button == review_button:
                     self.brain_nav.orth_view_setup.setup_viewer()
+                    # file_nr is already the new map: point the ROI tab at it
+                    # too, or it keeps showing the previous map's ROI TDPs.
+                    self.brain_nav.tblROI.sync_to_active_statmap()
                     return
                 elif clicked_button == cancel_button:
+                    self._revert_statmap_switch(prev_file_nr)
                     return
 
             item_widget = self.stat_images_list.itemWidget(selected_item)
@@ -879,6 +883,19 @@ class LeftSideBar(QWidget):
         else:
             print("No item selected")
 
+
+    def _revert_statmap_switch(self, prev_file_nr):
+        """
+        Undo a statmap switch the user cancelled in one of set_selected_item's
+        dialogs. By then file_nr and the raw-data background already point at
+        the new map while every view still shows the previous one, so put
+        both back and move the list highlight back to the previous row.
+        setCurrentRow does not emit itemClicked, so this does not re-enter
+        set_selected_item.
+        """
+        self.brain_nav.file_nr = prev_file_nr
+        self.switch_rawData_template()
+        self.stat_images_list.setCurrentRow(prev_file_nr)
 
     def switch_rawData_template(self):
         """
