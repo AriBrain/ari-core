@@ -181,6 +181,13 @@ class TblARI(QWidget):
                 cluster_id = int(self.table_widget.item(selected_row, 1).text())
                 self.brain_nav.ui_params['selected_cluster_id'] = cluster_id
 
+                # If the previous selection was an ROI, the overlay renderer
+                # is still in 'roi' mode — flip back before rendering so
+                # update_slices and update_cluster_3d_view read the cluster
+                # sources, not userAtlasInfo. Mirrors follow_roi_xyz's own
+                # mode write on the other side.
+                self.brain_nav.metrics._reset_to_cluster_mode()
+
                 # Update UI; slices, crosshair, metrics, 3dviewer and xyz spinboxes
                 self.brain_nav.orth_view_update.update_slices(selected_cluster_id=cluster_id)
                 self.brain_nav.orth_view_update.update_crosshairs()

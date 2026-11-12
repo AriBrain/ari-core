@@ -349,17 +349,70 @@ class MouseInteractions(QObject):
         """
         menu = QMenu()
 
-        # Add the "Select Cluster" action
+        # In ROI-analysis mode the orthoviews show the atlas overlay, so the
+        # right-click actions operate on ROIs rather than clusters: the xyz
+        # option selects the ROI under the crosshair, and the Local Minimum
+        # option (a cluster-tree concept) is greyed out since it has no ROI
+        # equivalent.
+        overlay_mode = self.brain_nav.ui_params.get('overlay_mode', 'cluster')
+        roi_mode = (
+            overlay_mode in ('atlas', 'roi')
+            and self.brain_nav.orth_view_update._has_user_atlas_for_active_view()
+        )
+
+        # Local Minimum — cluster-only; disabled (and greyed) in ROI mode.
         select_action_LM = QAction("Select Cluster (Local Minimum)", self.brain_nav)
         select_action_LM.triggered.connect(lambda: self.select_cluster_LM(event, source))
+        select_action_LM.setEnabled(not roi_mode)
         menu.addAction(select_action_LM)
 
-        select_action_xyz = QAction("Select Cluster (xyz)", self.brain_nav)
-        select_action_xyz.triggered.connect(lambda: self.select_cluster_xyz(event, source))
+        # xyz — selects the cluster or the ROI at the crosshair depending on mode.
+        if roi_mode:
+            select_action_xyz = QAction("Select ROI (xyz)", self.brain_nav)
+            select_action_xyz.triggered.connect(lambda: self.select_roi_xyz(event, source))
+        else:
+            select_action_xyz = QAction("Select Cluster (xyz)", self.brain_nav)
+            select_action_xyz.triggered.connect(lambda: self.select_cluster_xyz(event, source))
         menu.addAction(select_action_xyz)
 
         # Show the menu at the position of the right-click
         menu.exec_(event.screenPos())
+
+    def select_roi_xyz(self, event, source):
+        """
+        Select the ROI at the current crosshair position (ROI-analysis mode).
+
+        The atlas volume is in template UI space, so the crosshair slice
+        indices index it directly. Delegates to Metrics.follow_roi_xyz with
+        move_crosshair=False so the crosshair stays where the user put it.
+        """
+        atlas_key = self.brain_nav.orth_view_update._active_atlas_key()
+        atlas_entry = self.brain_nav.userAtlasInfo.get(atlas_key)
+        if atlas_entry is None:
+            return
+
+        atlas_vol = atlas_entry['data']
+
+        x_ui = self.brain_nav.sagittal_slice
+        y_ui = self.brain_nav.coronal_slice
+        z_ui = self.brain_nav.axial_slice
+
+        # Bounds guard — the crosshair can sit outside the atlas grid on
+        # template mismatches.
+        if not (0 <= x_ui < atlas_vol.shape[0]
+                and 0 <= y_ui < atlas_vol.shape[1]
+                and 0 <= z_ui < atlas_vol.shape[2]):
+            return
+
+        label = int(atlas_vol[x_ui, y_ui, z_ui])
+        if label <= 0:
+            self.brain_nav.message_box.log_message(
+                "<span style='color: orange;'>No ROI at the current crosshair "
+                "position.</span>"
+            )
+            return
+
+        self.brain_nav.metrics.follow_roi_xyz(label, move_crosshair=False)
 
 
     def _get_cluster_table_or_warn(self):
@@ -411,6 +464,11 @@ class MouseInteractions(QObject):
         # Communicate back to main UI and update work station
         self.brain_nav.ui_params['selected_row'] = row_number
         self.brain_nav.ui_params['selected_cluster_id'] = cluster_id
+
+        # If the previous selection was an ROI, the overlay renderer is
+        # still in 'roi' mode — flip back before rendering so
+        # update_cluster_3d_view reads the cluster sources.
+        self.brain_nav.metrics._reset_to_cluster_mode()
 
         # updated information in workstation
         self.brain_nav.cluster_ws.update_work_station(self.brain_nav.ui_params['selected_row'])
