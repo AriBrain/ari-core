@@ -2303,6 +2303,29 @@ class Metrics:
         tbl['Centroid (MNI)'] = mni_col
         bn.tblROI.update_table(tbl)
 
+    # Per-statmap ROI results, all computed against one particular atlas.
+    _ROI_RESULT_KEYS = ('tblROI_df', 'roi_tdps', 'roi_tdp_lut', 'roi_tdp_range')
+
+    def clear_roi_results(self):
+        """
+        Drop the ROI results of EVERY statmap, plus the ROI selection that
+        points into them. Called when a new atlas replaces the loaded one:
+        the results are keyed by atlas label, so keeping them painted the old
+        atlas's TDPs onto the new atlas's regions (heatmap, crosshair readout)
+        and into the exported roi_tdp_map / roi_table files.
+
+        Not called on project load: there the saved tables belong to the
+        atlas being restored.
+        """
+        bn = self.brain_nav
+        for info in bn.fileInfo.values():
+            for key in self._ROI_RESULT_KEYS:
+                info.pop(key, None)
+        bn.ui_params['selected_roi_label'] = None
+        bn.ui_params['atlas_colour_mode'] = 'categorical'
+        # The saved ROI-tab context may name a label of the old atlas.
+        bn.ui_params.pop('roi_view_context', None)
+
     def compute_roi_tdps(self, file_nr, file_nr_template):
         """
         For every ROI in the active user atlas, compute the TDP via
@@ -2468,6 +2491,9 @@ class Metrics:
                 "</span>"
             )
             self.brain_nav.fileInfo[file_nr]['tblROI_df'] = pd.DataFrame()
+            # No scores, so no heatmap: drop a LUT left by an earlier run.
+            self.brain_nav.fileInfo[file_nr].pop('roi_tdp_lut', None)
+            self.brain_nav.fileInfo[file_nr].pop('roi_tdp_range', None)
             return None
 
         tbl = (

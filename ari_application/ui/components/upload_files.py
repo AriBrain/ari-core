@@ -206,28 +206,24 @@ class UploadFiles:
         if not ok:
             return
 
-        # Switch the overlay layer to the atlas for verification. Enable the
-        # Run + Upload Codebook buttons (they live on TblROI, which owns
-        # the whole atlas operating panel) and update the ROI-count readout.
+        # ROI results of every statmap were computed with the previous atlas
+        # (if any) and are keyed by its labels, so they go.
+        self.brain_nav.metrics.clear_roi_results()
+
+        # Switch the overlay layer to the atlas for verification.
         self.brain_nav.ui_params['overlay_mode'] = 'atlas'
-        self.brain_nav.tblROI.atlas_run_button.setEnabled(True)
-        self.brain_nav.tblROI.atlas_codebook_button.setEnabled(True)
-        # The explainer has served its purpose — hand its height to the table.
-        self.brain_nav.tblROI.collapse_explainer()
         # The sidebar's Atlas section lists the loaded atlases; keep it honest.
         self.brain_nav.left_side_bar.refresh_atlas_list()
 
-        # ROI count = number of distinct labels in the codebook (auto-filled
-        # to include every non-zero label in the atlas, whether or not the
-        # sidecar named it).
-        sample_entry = next(iter(self.brain_nav.userAtlasInfo.values()), None)
-        if sample_entry is not None:
-            self.brain_nav.tblROI.set_roi_count(len(sample_entry['codebook']))
-            # Show the ROI list right away with placeholder TDP/centroid
-            # columns; compute_roi_tdps overwrites these when Run is clicked.
-            self.brain_nav.tblROI.populate_from_codebook(sample_entry['codebook'])
+        # Sync the ROI tab with the new atlas: Run + Upload Codebook enabled,
+        # explainer collapsed, ROI count, the codebook preview table (TDP and
+        # centroid columns are placeholders until Run) and the colour toggle,
+        # which is disabled until there are TDPs to colour by.
+        self.brain_nav.tblROI.restore_from_session()
 
         self.brain_nav.orth_view_update.update_slices()
+        # Drop a 3D ROI mesh left over from the previous atlas.
+        self.brain_nav.threeDviewer.update_cluster_3d_view(None)
 
     # ------------------------------------------------------------------
     # Analysis mask
