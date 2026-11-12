@@ -342,10 +342,14 @@ class InitiateTabs(QWidget):
             }
         """)
 
-        # Set a more modern/larger font
-        modern_font = QFont("Open Sans", 12)
-        modern_font.setStyleStrategy(QFont.PreferAntialias)
-        self.metrics_label.setFont(modern_font)
+        # System UI font. "Open Sans" was requested here but isn't installed,
+        # so Qt fell back to another family anyway, after a slow alias lookup
+        # ("Populating font family aliases took 57 ms" at startup).
+        panel_font = QFont()
+        panel_font.setPointSize(11)
+        panel_font.setStyleStrategy(QFont.PreferAntialias)
+        self.metrics_label.setFont(panel_font)
+        self.metrics_label.setTextFormat(Qt.RichText)
 
         # Optional: Add a drop shadow for a subtle glow
         shadow = QGraphicsDropShadowEffect()
@@ -355,16 +359,15 @@ class InitiateTabs(QWidget):
         self.metrics_label.setGraphicsEffect(shadow)
 
         # Update stylesheet for background, spacing, etc.
+        # Card in the rail's palette. Content (colours, sizes, layout) is set
+        # by Metrics._info_panel_html; this only styles the container.
         self.metrics_label.setStyleSheet("""
             QLabel {
-                background-color: #111;        /* Dark grey background */
-                color: #fff;                   /* White text */
-                padding: 15px;                 /* More padding for space around text */
-                border-radius: 8px;            /* Slightly rounded corners */
-                border: 1px solid #444;        /* Subtle border */
-                font-size: 14pt;               /* Larger font size (override if needed) */
-                line-height: 150%;             /* Increase vertical spacing between lines */
-                letter-spacing: 0.5px;         /* Subtle spacing between letters */
+                background-color: #0f1813;
+                color: #dfe6e2;
+                padding: 12px 16px;
+                border-radius: 8px;
+                border: 1px solid #2a3a32;
             }
         """)
 

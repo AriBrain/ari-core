@@ -7,6 +7,9 @@ from PyQt5.QtCore import Qt, pyqtSignal, QTimer, QSize
 from PyQt5.QtGui import QPainter, QFontMetrics, QColor, QFont
 
 from ari_application.resources.styles import Styles  # Adjust path if needed
+from ari_application.models.nifti_loader import (
+    NiftiLoader, AUTO_MASK_SOURCE, LEGACY_MASK_SOURCE,
+)
 
 import os
 from contextlib import contextmanager
@@ -461,6 +464,7 @@ class LeftSideBar(QWidget):
     stat_image_add_clicked = pyqtSignal()
     template_add_clicked = pyqtSignal()
     atlas_add_clicked = pyqtSignal()
+    mask_add_clicked = pyqtSignal()
 
 
     def __init__(self, BrainNav):
@@ -534,6 +538,24 @@ class LeftSideBar(QWidget):
         left_panel_layout.addWidget(self.atlas_section)
         self.refresh_atlas_list()
 
+        # === Analysis mask =================================================
+        # Dots here, unlike the atlas section: exactly one mask applies to the
+        # active statmap at a time. The dot follows the ACTIVE statmap, so it
+        # moves when you switch maps if they use different masks.
+        self._mask_sources = []
+        self.mask_list = ResourceList(row_factory=self._make_mask_row)
+        self.mask_list.itemClicked.connect(self._on_mask_row_clicked)
+
+        self.mask_section = Section(
+            "ANALYSIS MASK", self.mask_list,
+            on_add=self.mask_add_clicked.emit,
+            add_tooltip="Upload a brain mask for the selected statistical map",
+        )
+        self.mask_upload_button = self.mask_section.add_button
+
+        left_panel_layout.addWidget(self.mask_section)
+        self.refresh_mask_list()
+
         left_panel_layout.addStretch()
 
         self.left_panel_container = QWidget()
@@ -565,6 +587,91 @@ class LeftSideBar(QWidget):
         badge = "built-in" if index == 0 else "user"
         colour = _TEXT_DIM if index == 0 else _ACCENT
         return ResourceRow(name, badge=badge, badge_colour=colour, show_dot=False)
+
+    def _make_mask_row(self, name, index):
+        source = self._mask_sources[index]
+        kind = source.get('kind')
+        if kind == 'auto':
+            row = ResourceRow(name, badge="auto")
+            row.setToolTip(
+                "Default: every voxel that is neither NaN nor exactly zero "
+                "(the R ARIbrain rule)."
+            )
+        elif kind == 'legacy':
+            row = ResourceRow(name, badge="legacy", badge_colour=_TEXT_DIM)
+            row.setToolTip(
+                "How projects saved before the mask fix were analysed: every "
+                "non-NaN voxel, including the empty space around the brain. "
+                "Click 'Non-zero voxels' to re-analyse this map with the default."
+            )
+        else:
+            row = ResourceRow(name, badge="user", badge_colour=_ACCENT)
+            row.setToolTip(source.get('full_path', name))
+        return row
+
+    @staticmethod
+    def _same_mask(a, b):
+        if a.get('kind') != b.get('kind'):
+            return False
+        return a.get('kind') != 'user' or a.get('full_path') == b.get('full_path')
+
+    def refresh_mask_list(self):
+        """
+        Re-list the analysis masks: the automatic rule, every uploaded mask,
+        and a 'legacy' entry while any loaded statmap still uses the old
+        non-NaN-only mask (projects saved before the mask fix).
+
+        Uploaded masks come from the session list and from the statmaps
+        themselves, so a reopened project shows the masks it was analysed
+        with even though the upload happened in an earlier session.
+        """
+        if not hasattr(self, 'mask_list'):
+            return
+        bn = self.brain_nav
+        statmap_sources = [NiftiLoader.mask_source_of(info)
+                           for info in bn.fileInfo.values()]
+
+        sources = [dict(AUTO_MASK_SOURCE)]
+        for src in list(getattr(bn, 'userMasks', [])) + statmap_sources:
+            if src.get('kind') == 'user' and not any(
+                    self._same_mask(src, s) for s in sources):
+                sources.append(dict(src))
+        if any(src.get('kind') == 'legacy' for src in statmap_sources):
+            sources.append(dict(LEGACY_MASK_SOURCE))
+
+        labels = {'auto': "Non-zero voxels", 'legacy': "All non-NaN voxels"}
+        self._mask_sources = sources
+        self.mask_list.clear()
+        for src in sources:
+            self.mask_list.addItem(labels.get(src['kind'], src.get('filename', 'mask')))
+        self.refresh_markers()
+
+    def _on_mask_row_clicked(self, item):
+        """
+        Re-analyse the active statmap with the clicked mask (after a
+        confirmation — it is a full ARI re-run). Clicking the mask already in
+        use does nothing.
+        """
+        index = self.mask_list.row(item)
+        if not 0 <= index < len(self._mask_sources):
+            return
+        source = self._mask_sources[index]
+        bn = self.brain_nav
+        active = NiftiLoader.mask_source_of(bn.fileInfo.get(bn.file_nr, {}))
+        if self._same_mask(source, active):
+            return
+        if source.get('kind') == 'legacy':
+            # Listed so an old project's state is visible, not as something
+            # to choose for new analyses.
+            bn.message_box.info(
+                "The legacy mask is listed because a loaded project was "
+                "analysed with it. Choose 'Non-zero voxels' or an uploaded "
+                "mask to re-analyse."
+            )
+            self.refresh_markers()
+            return
+        bn.upload_files.apply_mask_and_rerun(source)
+        self.refresh_markers()
 
     def refresh_atlas_list(self):
         """
@@ -654,6 +761,15 @@ class LeftSideBar(QWidget):
                 continue
             row.set_active(i == self.brain_nav.file_nr_template)
             row.set_badge("raw data" if i == data_bg_index else "")
+
+        # Analysis mask: the one used by the active statmap.
+        if hasattr(self, 'mask_list'):
+            active = NiftiLoader.mask_source_of(
+                self.brain_nav.fileInfo.get(self.brain_nav.file_nr, {})
+            )
+            for i, row in enumerate(self.mask_list.rows()):
+                if row is not None and i < len(self._mask_sources):
+                    row.set_active(self._same_mask(self._mask_sources[i], active))
 
     def set_selected_item(self):
         """

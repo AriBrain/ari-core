@@ -15,6 +15,27 @@ from ari_application.models.image_processing import ImageProcessing
 from ari_application.models.image_processing import ImageProcessing
 
 
+# Where a statmap's analysis mask came from, stored as fileInfo['mask_source'].
+#   {'kind': 'auto'}                                  non-NaN and non-zero (R rule)
+#   {'kind': 'user', 'full_path': ..., 'filename': ...} an uploaded mask file
+#   {'kind': 'legacy'}                                 non-NaN only; projects saved
+#                                                      before the mask fix have no
+#                                                      mask_source and used this
+AUTO_MASK_SOURCE = {'kind': 'auto'}
+LEGACY_MASK_SOURCE = {'kind': 'legacy'}
+
+# The fileInfo keys a statmap has straight after loading — check_file_type's
+# output plus the atlas analysis grid, which is mask-independent. Everything
+# else on fileInfo[file_nr] was computed with a particular analysis mask
+# (p-values, cluster tree, gradient map, thresholding and ROI results, the
+# cached Hommel object), so changing the mask resets the statmap to these.
+_STATMAP_LOADER_KEYS = frozenset({
+    'type', 'df', 'valid', 'selected', 'filename', 'full_path', 'header',
+    'data', 'mask', 'grad_map', 'newAffine', 'original_orientation',
+    'original_data_dimensions', 'affine', 'sform', 'mask_source',
+    'atlas_on_analysis_grid', 'last_thresholding_method',
+})
+
 
 class NiftiLoader:
     def __init__(self, BrainNaV):
@@ -454,6 +475,173 @@ class NiftiLoader:
             n += 1
         return n
 
+    # ------------------------------------------------------------------
+    # Analysis mask
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def auto_mask(data):
+        """
+        The default analysis mask: voxels that are neither NaN nor exactly
+        zero — the R ARIbrain app's autoMask rule.
+        """
+        return ~np.isnan(data) & (data != 0)
+
+    @staticmethod
+    def mask_source_of(file_info):
+        """
+        The statmap's mask source, treating a missing entry as legacy: only
+        projects saved before the mask fix lack one, and those were analysed
+        with the non-NaN-only rule.
+        """
+        return file_info.get('mask_source', LEGACY_MASK_SOURCE)
+
+    @staticmethod
+    def describe_mask_source(source):
+        kind = source.get('kind')
+        if kind == 'auto':
+            return "auto (non-NaN, non-zero voxels)"
+        if kind == 'user':
+            return f"user mask {source.get('filename', '')}"
+        return "legacy (every non-NaN voxel)"
+
+    def load_user_mask(self, file_path, file_nr):
+        """
+        Read a mask NIfTI and bring it onto statmap `file_nr`'s analysis grid.
+
+        Mirrors the R app's upload checks (the file must load and be 3D) but
+        resamples rather than rejecting a different grid: header-based,
+        nearest-neighbour, the same way atlases are aligned. That covers the
+        common case of a 2 mm MNI mask used with a 3 mm statmap. A resample
+        is reported, since boundary voxels can land either side of it.
+
+        Any finite non-zero value counts as inside (R: `mask != 0`), so both
+        binary masks and intensity-masked brains work.
+
+        Returns (bool array on the statmap grid, [notes]) on success, or
+        (None, error message) on failure. Does not change the statmap.
+        """
+        name = os.path.basename(file_path)
+        try:
+            img = nib.load(file_path)
+        except Exception as e:
+            return None, f"Could not read mask {name}: {e}"
+
+        # A single-volume 4D file is still a 3D mask.
+        img = nib.funcs.squeeze_image(img)
+        if len(img.shape) != 3:
+            return None, (f"Mask {name} must be a 3D volume; it has shape "
+                          f"{img.shape}.")
+        img = nib.as_closest_canonical(img)
+
+        info = self.brain_nav.fileInfo[file_nr]
+        data, affine = info['data'], info['affine']
+
+        notes = []
+        if img.shape == data.shape and np.allclose(img.affine, affine, atol=1e-3):
+            vol = np.asarray(img.get_fdata())
+        else:
+            ref = nib.Nifti1Image(data, affine=affine, header=info.get('header'))
+            aligned, _ = ImageProcessing.align_images(ref, img, order=0)
+            vol = aligned.get_fdata()
+            notes.append(
+                f"Mask {name} was resampled from {img.shape} onto the "
+                f"statmap grid {data.shape} (nearest neighbour, header-based)."
+            )
+
+        mask = np.isfinite(vol) & (vol != 0)
+        if not mask.any():
+            return None, (f"Mask {name} has no voxels inside the statmap's "
+                          f"field of view — is it in the same space?")
+        return mask, notes
+
+    def reset_statmap_results(self, file_nr):
+        """
+        Drop everything on fileInfo[file_nr] that was computed with the
+        current analysis mask, leaving the statmap as it was just after
+        loading. Called before re-analysing with a different mask; without it
+        the old cluster table, ROI results and cached Hommel object would
+        survive the re-run and describe a mask that is no longer in use.
+        """
+        info = self.brain_nav.fileInfo[file_nr]
+        for key in [k for k in info if k not in _STATMAP_LOADER_KEYS]:
+            del info[key]
+        info['grad_map'] = None
+
+    def apply_analysis_mask(self, file_nr, source, user_mask=None):
+        """
+        Set statmap `file_nr`'s analysis mask and clear its results, ready
+        for pyARI.runARI.
+
+        source: AUTO_MASK_SOURCE, or {'kind': 'user', 'full_path',
+        'filename'} together with `user_mask` from load_user_mask. A user mask
+        is combined with the data as the R app did,
+        `(!is.na(data)) & (mask != 0)`: it is authoritative about which voxels
+        are brain, so zero-valued voxels inside it are kept as hypotheses.
+
+        Returns False, leaving the statmap untouched, if the result would be
+        empty.
+        """
+        info = self.brain_nav.fileInfo[file_nr]
+        data = info['data']
+
+        if source.get('kind') == 'user':
+            mask = ~np.isnan(data) & user_mask
+        else:
+            mask = self.auto_mask(data)
+
+        if not mask.any():
+            self.brain_nav.message_box.error(
+                f"The {self.describe_mask_source(source)} leaves no voxels to "
+                f"analyse in {info.get('filename', 'this statmap')}; the "
+                f"current mask was kept."
+            )
+            return False
+
+        self.reset_statmap_results(file_nr)
+        info['mask'] = mask
+        info['mask_source'] = dict(source)
+        self.log_analysis_mask(file_nr)
+        return True
+
+    def log_analysis_mask(self, file_nr):
+        """
+        One line saying which mask a statmap is analysed with and what it
+        contains. A poor mask otherwise hides inside a plausible-looking
+        result, so this runs on every load and every mask change.
+
+        Reports m and its share of the volume, plus the two ways a mask can
+        disagree with the data: non-zero data voxels it leaves out, and
+        zero-valued voxels it takes in. Warns when most of the data falls
+        outside the mask, which usually means the two are in different spaces.
+        """
+        info = self.brain_nav.fileInfo[file_nr]
+        data, mask = info['data'], info['mask']
+        source = self.mask_source_of(info)
+
+        m = int(mask.sum())
+        line = (f"Analysis mask for {info.get('filename', f'statmap {file_nr}')}: "
+                f"{self.describe_mask_source(source)} — m = {m:,} voxels "
+                f"({100 * m / mask.size:.1f}% of the volume)")
+
+        informative = np.isfinite(data) & (data != 0)
+        n_informative = int(informative.sum())
+        excluded = int((informative & ~mask).sum())
+        zeros_in = int((mask & (data == 0)).sum())
+        if excluded:
+            line += (f"; leaves out {excluded:,} non-zero data voxels "
+                     f"({100 * excluded / max(n_informative, 1):.1f}% of the data)")
+        if zeros_in:
+            line += f"; includes {zeros_in:,} zero-valued voxels"
+
+        if n_informative and excluded / n_informative > 0.25:
+            self.brain_nav.message_box.warn(
+                line + ". Most of the data lies outside this mask — check "
+                       "that the mask and statmap are in the same space."
+            )
+        else:
+            self.brain_nav.message_box.info(line)
+
     @staticmethod
     def _spatial_space(img):
         """
@@ -782,9 +970,18 @@ class NiftiLoader:
         # tr_image = ImageProcessing.transpose_image(data)
         # fileInfo['data'] = tr_image.get_fdata()
 
-        # Set mask based on valid data values
-        fileInfo['mask'] = ~np.isnan(fileInfo['data']) #& (fileInfo['data'] != 0)
-        # fileInfo['mask'] = (fileInfo['data'] != 0)
+        # Analysis mask: voxels that are neither NaN nor exactly zero. This is
+        # the R ARIbrain app's autoMask rule (menu2.R), and reproduces R's
+        # in-mask voxel set exactly. Most packages (FSL, SPM) write 0 outside
+        # the brain rather than NaN, so a NaN-only mask selected the whole
+        # volume: ~70-80% of every analysis was empty space entered as p=1
+        # hypotheses, inflating m and weakening every TDP bound (z.nii:
+        # whole-brain TDP 0.0439 with NaN-only, 0.1978 with this rule). For a
+        # p-map with a zero-filled background it was worse: those voxels
+        # entered as p=0 and overstated results. See docs/MASKING_FIX_PLAN.md.
+        # A different mask can be applied afterwards (apply_analysis_mask).
+        fileInfo['mask'] = NiftiLoader.auto_mask(fileInfo['data'])
+        fileInfo['mask_source'] = dict(AUTO_MASK_SOURCE)
 
         # transposed_affine = tr_image.affine
         # print("Updated affine after reordering axes:\n", transposed_affine)
@@ -863,6 +1060,7 @@ class NiftiLoader:
         # fileInfo['type'] = 'z' 
 
         self.brain_nav.fileInfo[file_nr] = fileInfo
+        self.log_analysis_mask(file_nr)
 
         # If a user atlas is already loaded, give this statmap its analysis
         # grid straight away. Otherwise a statmap uploaded after an atlas

@@ -148,9 +148,10 @@ class pyHommel:
         discoveries = hommel.py_findDiscoveries(ix_sorted_p, all_sorted_p, simes_factor, h, alpha, k, m)
 
         if not incremental:
-            # If not incremental, return the number of discoveries for the last index
-            # return discoveries[k]
-            return discoveries[k-1]
+            # The C++ routine returns k+1 cumulative counts, discoveries[0] = 0,
+            # so the total for the whole selection is discoveries[k].
+            # discoveries[k-1] dropped the last hypothesis in ix.
+            return discoveries[k]
         else:
             # If incremental, return the number of discoveries for each step
             return discoveries[1:]
@@ -275,7 +276,8 @@ class DiscoveryContext:
             k,
             self.m,
         )
-        return discoveries[k - 1]
+        # k+1 cumulative counts with discoveries[0] = 0; the total is [k].
+        return discoveries[k]
 
     def tdp(self, ix):
         """

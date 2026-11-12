@@ -3,6 +3,8 @@ import pyqtgraph as pg
 from matplotlib.colors import ListedColormap
 from pyqtgraph import TextItem
 
+from ari_application.models.nifti_loader import NiftiLoader
+
 class OrthViewUpdate:
     def __init__(self, BrainNaV):
         """
@@ -110,27 +112,24 @@ class OrthViewUpdate:
         
         # Check if the data is in C-order or F-order - should always be C-order as it is forced in rotate method
         # Update the views using the masked data.
+        # Clamp to the volume on both sides: a crosshair from a different grid
+        # can be past the end, and a negative index would silently wrap round
+        # to the opposite edge of the brain.
+        def clamp(i, axis):
+            return int(min(max(i, 0), masked_data.shape[axis] - 1))
+
         if data.flags['C_CONTIGUOUS']:
-            # # For C-contiguous data:
-            # self.brain_nav.axial_view.setImage(masked_data[:, :, self.brain_nav.axial_slice])
-            # self.brain_nav.sagittal_view.setImage(masked_data[self.brain_nav.sagittal_slice, :, :])
-            # self.brain_nav.coronal_view.setImage(masked_data[:, self.brain_nav.coronal_slice, :])
+            axial_slice    = masked_data[:, :, clamp(self.brain_nav.axial_slice, 2)]
+            sagittal_slice = masked_data[clamp(self.brain_nav.sagittal_slice, 0), :, :]
+            coronal_slice  = masked_data[:, clamp(self.brain_nav.coronal_slice, 1), :]
+        else:
+            axial_slice    = masked_data[clamp(self.brain_nav.axial_slice, 0), :, :]
+            sagittal_slice = masked_data[:, :, clamp(self.brain_nav.sagittal_slice, 2)]
+            coronal_slice  = masked_data[:, clamp(self.brain_nav.coronal_slice, 1), :]
 
-            # Ensure slice indices are within bounds
-            axial_slice = min(self.brain_nav.axial_slice, masked_data.shape[2] - 1)
-            sagittal_slice = min(self.brain_nav.sagittal_slice, masked_data.shape[0] - 1)
-            coronal_slice = min(self.brain_nav.coronal_slice, masked_data.shape[1] - 1)
-
-            # For C-contiguous data:
-            self.brain_nav.axial_view.setImage(masked_data[:, :, axial_slice])
-            self.brain_nav.sagittal_view.setImage(masked_data[sagittal_slice, :, :])
-            self.brain_nav.coronal_view.setImage(masked_data[:, coronal_slice, :])
-
-        elif data.flags['F_CONTIGUOUS']:
-            # For F-contiguous data:
-            self.brain_nav.axial_view.setImage(masked_data[self.brain_nav.axial_slice, :, :])
-            self.brain_nav.sagittal_view.setImage(masked_data[:, :, self.brain_nav.sagittal_slice])
-            self.brain_nav.coronal_view.setImage(masked_data[:, self.brain_nav.coronal_slice, :])
+        self.brain_nav.axial_view.setImage(self._displayable(axial_slice))
+        self.brain_nav.sagittal_view.setImage(self._displayable(sagittal_slice))
+        self.brain_nav.coronal_view.setImage(self._displayable(coronal_slice))
 
         # Set the ranges for the views
         # This ensures that the view ranges are updated to reflect any changes in the displayed slices.
@@ -268,6 +267,22 @@ class OrthViewUpdate:
         self.brain_nav.UIHelp.update_ui_xyz()
 
 
+    @staticmethod
+    def _displayable(slice_2d):
+        """
+        A background slice pyqtgraph can render.
+
+        Empty background voxels are NaN here, so a slice that misses the
+        brain entirely is all-NaN. ImageView derives its display range from
+        nanmin/nanmax of the slice, gets NaN, and raises "Cannot set range
+        [nan, nan]" — which took down tab switches on maps with empty edge
+        slices (bart_Accept has 16 sagittal ones). An all-zero slice renders
+        as the same black background and gives a valid (0, 0) range.
+        """
+        if np.isfinite(slice_2d).any():
+            return slice_2d
+        return np.zeros_like(slice_2d)
+
     def add_overlay_with_transparency(self, selected_cluster_id=None):
         """
         Draw the statmap overlay on the three slices.
@@ -294,14 +309,10 @@ class OrthViewUpdate:
 
         - Label maps really do use 0 for "no cluster", so row 0 of the LUT
           being fully transparent covers it.
-        - The gradient map has no 0 background at all. fileInfo['mask'] is
-          ~isnan(data), which for a statmap with no NaNs is every voxel in
-          the volume, so the cluster tree spans the whole FOV and every voxel
-          comes out at or above the whole-brain TDP bound. Measured on the
-          project's own test map: 0 voxels at exactly 0, and 71.5% of the
-          volume sitting on the floor value, all of it outside the brain.
-          Those floor voxels are the plateau that must not be painted — see
-          _gradient_levels.
+        - The gradient map is 0 outside the analysis mask, which row 0 also
+          covers, so it is drawn at fixed levels (0, 1). The exception is
+          projects saved with the old NaN-only mask, whose background sits on
+          a non-zero plateau instead of 0 — see _gradient_levels.
         """
 
         if selected_cluster_id is not None:
@@ -381,34 +392,36 @@ class OrthViewUpdate:
 
     def _gradient_levels(self, file_nr):
         """
-        Colour levels for the TDP gradient map: (mintdp, 1.0).
+        Colour levels for the TDP gradient map. Fixed levels either way — never
+        pyqtgraph's per-slice auto levels, which drew the same TDP in different
+        colours on different slices.
 
-        The low anchor is the whole-brain TDP bound, not 0, and that is what
-        makes the non-brain plateau disappear. Because the analysis mask is
-        ~isnan(data) — every voxel when the statmap has no NaNs — the cluster
-        tree covers the whole field of view and every voxel ends up at or
-        above that bound. The floor is the largest gamma step <= mintdp, so
-        anchoring the scale at mintdp puts the entire plateau on LUT row 0,
-        which is transparent. Anything genuinely localised sits above it and
-        keeps its colour.
+        (0, 1) — the normal case, and what the R ARIbrain app used
+        (zlim = c(0, 1)). Outside the analysis mask the gradient map is exactly
+        0, which lands on the transparent LUT row; every in-mask voxel is
+        coloured by its TDP, including voxels whose only evidence is weak.
 
-        This is what pyqtgraph's automatic levels were achieving by accident:
-        with the background NaN'd out, the auto minimum landed on the
-        smallest non-zero value, i.e. the floor. The difference is that auto
-        levels are recomputed from whatever slice is on screen, so the same
-        TDP drew in different colours on different slices. mintdp is a
-        constant of the statmap, so the mapping is stable while scrolling and
-        across templates.
+        (mintdp, 1) — legacy masks only. Projects analysed with the old
+        NaN-only mask put the whole volume, background included, into the
+        analysis, so the background sits on a plateau just below the
+        whole-brain TDP bound instead of at 0. Anchoring at mintdp puts that
+        plateau on the transparent row; at (0, 1) it painted the field of view
+        purple.
 
-        Semantically the hidden voxels are the ones carrying no localised
-        evidence: all the whole-brain bound says is "TDP >= mintdp
-        everywhere", which is true by construction and not a finding.
+        Do not use the mintdp anchor with a real mask. There the brain has
+        voxels below the whole-brain bound — regions with weaker evidence than
+        the brain as a whole — and the anchor blanks them: 29% of the brain on
+        z.nii, 28% on bart_Accept. That is also what the original auto-level
+        code did once the mask excluded zeros, which is plausibly why the
+        `& (data != 0)` had been commented out.
 
-        Falls back to 0.0 when mintdp is absent (ARI not run yet), which just
-        means nothing is suppressed.
+        Falls back to (0, 1) for a legacy mask when mintdp is absent.
         """
-        mintdp = self.brain_nav.fileInfo.get(file_nr, {}).get('mintdp')
-        return (float(mintdp) if mintdp is not None else 0.0, 1.0)
+        info = self.brain_nav.fileInfo.get(file_nr, {})
+        if NiftiLoader.mask_source_of(info).get('kind') == 'legacy':
+            mintdp = info.get('mintdp')
+            return (float(mintdp) if mintdp is not None else 0.0, 1.0)
+        return (0.0, 1.0)
 
     @staticmethod
     def _index_through_lut(slice_2d, lut):
