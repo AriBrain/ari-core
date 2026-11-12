@@ -144,8 +144,9 @@ class pyHommel:
         ix_sorted_p = ix_sorted_p.tolist()
         all_sorted_p = all_sorted_p.tolist()
 
-        # Find the number of discoveries using the C++ function
-        discoveries = hommel.py_findDiscoveries(ix_sorted_p, all_sorted_p, simes_factor, h, alpha, k, m)
+        # Size of the concentration set, then the number of discoveries
+        z = self.concentration_size(alpha, h=h, simes_factor=simes_factor)
+        discoveries = hommel.py_findDiscoveries(ix_sorted_p, all_sorted_p, simes_factor, h, alpha, k, z, m)
 
         if not incremental:
             # The C++ routine returns k+1 cumulative counts, discoveries[0] = 0,
@@ -172,6 +173,25 @@ class pyHommel:
         """
         return DiscoveryContext(self, alpha)
 
+    def concentration_size(self, alpha, h=None, simes_factor=None):
+        """
+        Size z of the concentration set at `alpha`, as findDiscoveries needs it.
+
+        The C++ findConcentration walks the p-values in ascending order via
+        their 1-based sort order (ORD), so the p-values can be passed in their
+        original order: ORD is self.sorter + 1. h and simes_factor can be
+        passed in when the caller already has them.
+        """
+        m = len(self.p)
+        if h is None:
+            h = hommel.py_findHalpha(self.jump_alpha, alpha, m)
+        if simes_factor is None:
+            simes_factor = self.simes_factor[h]
+        ord_1based = (np.asarray(self.sorter) + 1).tolist()
+        return hommel.py_findConcentration(
+            np.asarray(self.p, dtype=float).tolist(), ord_1based, simes_factor, h, alpha, m
+        )
+
     def concentration(self, alpha):
         """
         Calculate the concentration of p-values for a given alpha.
@@ -193,10 +213,15 @@ class pyHommel:
         # Sort the p-values using the stored sorter
         sorted_p = self.p[self.sorter]
         # Find the concentration using the C++ function
-        z = hommel.py_findConcentration(sorted_p.tolist(), simes_factor, h, alpha, m)
+        z = self.concentration_size(alpha, h=h, simes_factor=simes_factor)
 
-        # Return the p-value at the determined concentration index
-        return sorted_p[z]
+        # z counts p-values (1-based), so the z-th smallest is sorted_p[z - 1],
+        # as R's hommel::concentration returns sortedp[z]. sorted_p[z] was the
+        # next one up. z = 0 (h = m) means an empty concentration set: R
+        # returns numeric(0); 0.0 here means no p-value qualifies.
+        if z == 0:
+            return 0.0
+        return sorted_p[z - 1]
 
     def set_brain_nav(self, brain_nav):
         """
@@ -253,6 +278,10 @@ class DiscoveryContext:
         rank_1based[sorter] = np.arange(1, m + 1)
         self.rank_1based = rank_1based
 
+        # Size of the concentration set: depends only on p and alpha, so it
+        # is computed once here instead of inside every findDiscoveries call.
+        self.z = hom.concentration_size(alpha, h=self.h, simes_factor=self.simes_factor)
+
         # p is NaN-free by construction (hommel_wbTDP raises on missing
         # values), so the per-call NaN check discoveries() performs is
         # redundant here.
@@ -274,6 +303,7 @@ class DiscoveryContext:
             self.h,
             self.alpha,
             k,
+            self.z,
             self.m,
         )
         # k+1 cumulative counts with discoveries[0] = 0; the total is [k].

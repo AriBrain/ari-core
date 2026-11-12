@@ -12,8 +12,8 @@ cdef extern from "../cpp_sources/hommel.h":
     vector[double] adjustedElementary(const vector[double]& p, const vector[double]& alpha, int m, const vector[double]& simesfactor)
     double adjustedIntersection(double pI, const vector[double]& alpha, int m, const vector[double]& simesfactor)
     int findHalpha(const vector[double]& jumpalpha, double alpha, int m)
-    int findConcentration(const vector[double]& p, double simesfactor, int h, double alpha, int m)
-    vector[int] findDiscoveries(const vector[int]& idx, const vector[double]& allp, double simesfactor, int h, double alpha, int k, int m)
+    int findConcentration(const vector[double]& allp, const vector[int]& ORD, double simesfactor, int h, double alpha, int m)
+    vector[int] findDiscoveries(const vector[int]& idx, const vector[double]& allp, double simesfactor, int h, double alpha, int k, int z, int m)
 
 def py_findhull(int m, list p):
     cdef vector[double] p_vector = p
@@ -47,14 +47,17 @@ def py_findHalpha(list jumpalpha, double alpha, int m):
     cdef int result = findHalpha(jumpalpha_vector, alpha, m)
     return result
 
-def py_findConcentration(list p, double simesfactor, int h, double alpha, int m):
-    cdef vector[double] p_vector = p
-    cdef int result = findConcentration(p_vector, simesfactor, h, alpha, m)
+def py_findConcentration(list allp, list ORD, double simesfactor, int h, double alpha, int m):
+    # allp in any order; ORD its 1-based ascending sort order (1..m if allp is sorted).
+    cdef vector[double] allp_vector = allp
+    cdef vector[int] ORD_vector = ORD
+    cdef int result = findConcentration(allp_vector, ORD_vector, simesfactor, h, alpha, m)
     return result
 
-def py_findDiscoveries(list idx, list allp, double simesfactor, int h, double alpha, int k, int m):
+def py_findDiscoveries(list idx, list allp, double simesfactor, int h, double alpha, int k, int z, int m):
+    # z: size of the concentration set, from py_findConcentration.
     cdef vector[int] idx_vector = idx
     cdef vector[double] allp_vector = allp
-    cdef vector[int] result = findDiscoveries(idx_vector, allp_vector, simesfactor, h, alpha, k, m)
+    cdef vector[int] result = findDiscoveries(idx_vector, allp_vector, simesfactor, h, alpha, k, z, m)
     return list(result)
 

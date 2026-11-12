@@ -258,7 +258,8 @@ std::vector<int> findDiscoveries_one_based(const std::vector<int>& idx, const st
 
 
 // Compute the TDP bounds of the heavy path starting at v (1-based indexing)
-void heavyPathTDP(int v, int par, int m, int h, double alpha, double simesh, std::vector<double>& P, std::vector<int>& SIZE, std::vector< std::vector<int> >& CHILD, std::vector<double>& TDP)
+// z: size of the concentration set, computed once in forestTDP.
+void heavyPathTDP(int v, int par, int m, int h, int z, double alpha, double simesh, std::vector<double>& P, std::vector<int>& SIZE, std::vector< std::vector<int> >& CHILD, std::vector<double>& TDP)
 {
     // Use descendants with one-based indexing
     std::vector<int> HP = descendants(v, SIZE, CHILD);  
@@ -267,7 +268,7 @@ void heavyPathTDP(int v, int par, int m, int h, double alpha, double simesh, std
         HP[i]++;  // Adjust descendants to 1-based indexing
     }
 
-    std::vector<int> NUM = findDiscoveries(HP, P, simesh, h, alpha, HP.size(), m);
+    std::vector<int> NUM = findDiscoveries(HP, P, simesh, h, alpha, HP.size(), z, m);
     // std::vector<int> NUM = findDiscoveries_one_based(HP, P, simesh, h, alpha, HP.size(), m);
 
 
@@ -296,16 +297,21 @@ void heavyPathTDP(int v, int par, int m, int h, double alpha, double simesh, std
 }
 
 
-std::vector<double> forestTDP(int m, int h, double alpha, double simesh, std::vector<double>& P, std::vector<int>& SIZE, std::vector<int>& ROOT, std::vector< std::vector<int> >& CHILD)
+// P is in voxel order (unsorted!); ORD is its 1-based sort order (ordp).
+std::vector<double> forestTDP(int m, int h, double alpha, double simesh, std::vector<double>& P, std::vector<int>& ORD, std::vector<int>& SIZE, std::vector<int>& ROOT, std::vector< std::vector<int> >& CHILD)
 {
     // std::cout << "Entering forestTDP function" << std::endl;  // Log entry to function
     std::vector<double> TDP(m);
+
+    // Size of the concentration set, once for the whole forest. ORD lets
+    // findConcentration walk P in ascending order without sorting it.
+    int z = findConcentration(P, ORD, simesh, h, alpha, m);
 
     // Loop through all roots
     for (size_t i = 0; i < ROOT.size(); i++)
     {
         // No subtraction for ROOT[i] as it matches the original
-        heavyPathTDP(ROOT[i], -1, m, h, alpha, simesh, P, SIZE, CHILD, TDP);  
+        heavyPathTDP(ROOT[i], -1, m, h, z, alpha, simesh, P, SIZE, CHILD, TDP);  
     }
     
     // Loop through all nodes
@@ -316,7 +322,7 @@ std::vector<double> forestTDP(int m, int h, double alpha, double simesh, std::ve
         // Loop through all children starting from the second child (1-based index logic)
         for (size_t j = 1; j < CHD.size(); j++)
         {
-            heavyPathTDP(CHD[j], i, m, h, alpha, simesh, P, SIZE, CHILD, TDP);
+            heavyPathTDP(CHD[j], i, m, h, z, alpha, simesh, P, SIZE, CHILD, TDP);
         }
     }
 

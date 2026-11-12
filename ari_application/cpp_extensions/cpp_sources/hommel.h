@@ -37,10 +37,10 @@ std::vector<double> findsimesfactor(bool simes, int m);
 std::vector<double> adjustedElementary(const std::vector<double>& p, const std::vector<double>& alpha, int m, const std::vector<double>& simesfactor);
 double adjustedIntersection(double pI, const std::vector<double>& alpha, int m, const std::vector<double>& simesfactor);
 int findHalpha(const std::vector<double>& jumpalpha, double alpha, int m);
-int findConcentration(const std::vector<double>& p, double simesfactor, int h, double alpha, int m);
+int findConcentration(const std::vector<double>& allp, const std::vector<int>& ORD, double simesfactor, int h, double alpha, int m);
 int Find(int x, std::vector<int>& parent);
 void Union(int x, int y, std::vector<int>& parent, std::vector<int>& lowest, std::vector<int>& rank);
 int getCategory(double p, double simesfactor, double alpha, int m);
-std::vector<int> findDiscoveries(const std::vector<int>& idx, const std::vector<double>& allp, double simesfactor, int h, double alpha, int k, int m);
+std::vector<int> findDiscoveries(const std::vector<int>& idx, const std::vector<double>& allp, double simesfactor, int h, double alpha, int k, int z, int m);
 
 #endif // HOMMEL_H
