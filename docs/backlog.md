@@ -82,9 +82,3 @@ Reported November 2026.
 - **p-maps whose strongest voxels underflowed to exactly 0:** the auto-mask removes those voxels without warning. Uploading a mask avoids it. Document this in the user guide.
 - **The masking work was not tested in the real 3D viewer.** Offscreen test runs replace it with a stand-in, because it needs an OpenGL context.
 - **`docs/MASKING_FIX_PLAN.md` is out of date.** It describes an earlier, broader plan.
-
-### `pyHommel.concentration` returns the next p-value
-
-- **Symptom:** the concentration threshold (`conc_thres` in `runARI`, shown as `z_conc`) is one p-value too high in the sorted list.
-- **Cause:** `findConcentration` returns z as a 1-based count, and R's `hommel::concentration` returns `sortedp[z]`, the z-th smallest p-value. The Python port returns `sorted_p[z]`, which with 0-based indexing is the (z+1)-th.
-- **Fix idea:** return `sorted_p[z - 1]`, and guard z = 0.

@@ -215,8 +215,13 @@ class pyHommel:
         # Find the concentration using the C++ function
         z = self.concentration_size(alpha, h=h, simes_factor=simes_factor)
 
-        # Return the p-value at the determined concentration index
-        return sorted_p[z]
+        # z counts p-values (1-based), so the z-th smallest is sorted_p[z - 1],
+        # as R's hommel::concentration returns sortedp[z]. sorted_p[z] was the
+        # next one up. z = 0 (h = m) means an empty concentration set: R
+        # returns numeric(0); 0.0 here means no p-value qualifies.
+        if z == 0:
+            return 0.0
+        return sorted_p[z - 1]
 
     def set_brain_nav(self, brain_nav):
         """
