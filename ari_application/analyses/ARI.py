@@ -208,7 +208,9 @@ class pyARI:
         # TDP calculation step
         print('entering py_forestTDP')
         progress.setLabelText("Computing cluster TDP values...")
-        tdps    = ARI_C.py_forestTDP(m, halpha, alpha, simeshalpha, p.tolist(), reslist["SIZE"], reslist["ROOT"], reslist["CHILD"])
+        # p is in voxel order; ordp (1-based sort order) lets forestTDP find the
+        # concentration set on the ascending p-values without sorting p.
+        tdps    = ARI_C.py_forestTDP(m, halpha, alpha, simeshalpha, p.tolist(), ordp.tolist(), reslist["SIZE"], reslist["ROOT"], reslist["CHILD"])
         progress.setValue(HOMMEL_STEPS + HALPHA_STEPS + ADJLIST_STEPS + CLUSTERS_STEPS + TDP_STEPS)
 
         # Sentinel check: forestTDP can return all -1 when the indexing into the

@@ -34,7 +34,9 @@ print("\nfindHalpha:")
 print(hommel.py_findHalpha(simesfactor, 0.5, m))
 
 print("\nfindConcentration:")
-print(hommel.py_findConcentration(p, 1.0, 5, 0.5, m))
+ord_1based = list(range(1, m + 1))  # p is already sorted
+z = hommel.py_findConcentration(p, ord_1based, 1.0, 5, 0.5, m)
+print(z)
 
 print("\nfindDiscoveries:")
-print(hommel.py_findDiscoveries([1, 2, 3, 4, 5], p, 1.0, 5, 0.5, 5, m))
+print(hommel.py_findDiscoveries([1, 2, 3, 4, 5], p, 1.0, 5, 0.5, 5, z, m))
