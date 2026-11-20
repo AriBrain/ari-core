@@ -178,8 +178,8 @@ extensions = [
     ),
 ]
 
-with open("requirements.txt") as f:
-    requirements = f.read().splitlines()
+# Runtime dependencies are declared once, in pyproject.toml ([project]
+# dependencies). requirements.txt no longer exists.
 
 setup(
     name="aribrain",
@@ -188,7 +188,6 @@ setup(
     ext_modules=cythonize(extensions),
     include_dirs=[np.get_include()],
     python_requires=">=3.10.11,<=3.10.14",
-    install_requires=requirements,
     entry_points={
         'gui_scripts': [
             'aribrain = ari_application.main:main'

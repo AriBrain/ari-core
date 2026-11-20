@@ -1,5 +1,4 @@
 include README.md
-include requirements.txt
 recursive-include ari_application/cython *.pyx *.cpp *.h
 recursive-include ari_application/resources *
 recursive-include ari_application/public *

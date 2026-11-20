@@ -148,12 +148,20 @@ int findHalpha(const std::vector<double>& jumpalpha, double alpha, int m) {
     return lower;
 }
 
-// Calculates the size of the concentration set at a fixed alpha
-int findConcentration(const std::vector<double>& p, double simesfactor, int h, double alpha, int m) {
+// Calculates the size of the concentration set at a fixed alpha.
+//
+// The concentration set is defined on the p-values in ascending order, so the
+// z-th smallest p-value is allp[ORD[z-1] - 1]. ORD is the 1-based sort order
+// of allp (like R's order(p)), so allp itself may be in any order: voxel order
+// from forestTDP, or already sorted (then ORD is 1..m). Reading allp[z-1]
+// directly, as before, silently assumed sorted input; forestTDP passes voxel
+// order, which gave a too-small z, a too-low maxcat in findDiscoveries and
+// therefore cluster TDPs that were too low.
+// Same fix as the R ARIbrain package (wdweeda/ARIbrain 4d355d2, Xu Chen).
+int findConcentration(const std::vector<double>& allp, const std::vector<int>& ORD, double simesfactor, int h, double alpha, int m) {
     int z = m - h;
     if (z > 0) {
-        // while ((z < m) & (simesfactor * p[z-1] > (z - m + h + 1) * alpha)) {
-        while ((z < m) && (simesfactor * p[z-1] > (z - m + h + 1) * alpha)) {
+        while ((z < m) && (simesfactor * allp[ORD[z-1] - 1] > (z - m + h + 1) * alpha)) {
             z++;
         }
     }
@@ -206,10 +214,12 @@ int getCategory(double p, double simesfactor, double alpha, int m) {
 // int Find(int x, std::vector<int>& parent);
 // void Union(int x, int y, std::vector<int>& parent, std::vector<int>& lowest, std::vector<int>& rank);
 // int getCategory(double p, double simesfactor, double alpha, int m);
-// int findConcentration(const std::vector<double>& p, double simesfactor, int h, double alpha, int m);
+// int findConcentration(const std::vector<double>& allp, const std::vector<int>& ORD, double simesfactor, int h, double alpha, int m);
 
-// Implementation of findDiscoveries
-std::vector<int> findDiscoveries(const std::vector<int>& idx, const std::vector<double>& allp, double simesfactor, int h, double alpha, int k, int m) {
+// Implementation of findDiscoveries. z is the size of the concentration set
+// (findConcentration); it depends only on the full p-value vector and alpha,
+// so callers compute it once and pass it in rather than per query.
+std::vector<int> findDiscoveries(const std::vector<int>& idx, const std::vector<double>& allp, double simesfactor, int h, double alpha, int k, int z, int m) {
     // Calculate categories for the p-values
     std::vector<int> cats;
     for (int i = 0; i < k; i++) {
@@ -217,7 +227,6 @@ std::vector<int> findDiscoveries(const std::vector<int>& idx, const std::vector<
     }
 
     // Find the maximum category needed
-    int z = findConcentration(allp, simesfactor, h, alpha, m);
     int maxcat = std::min(z - m + h + 1, k);
     int maxcatI = 0;
     for (int i = k - 1; i >= 0; i--) {

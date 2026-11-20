@@ -6,8 +6,8 @@
 
 std::vector<int> descendants(int v, std::vector<int>& SIZE, std::vector< std::vector<int> >& CHILD);
 
-void heavyPathTDP(int v, int par, int m, int h, double alpha, double simesh, std::vector<double>& P, std::vector<int>& SIZE, std::vector< std::vector<int> >& CHILD, std::vector<double>& TDP);
-std::vector<double> forestTDP(int m, int h, double alpha, double simesh, std::vector<double>& P, std::vector<int>& SIZE, std::vector<int>& ROOT, std::vector< std::vector<int> >& CHILD);
+void heavyPathTDP(int v, int par, int m, int h, int z, double alpha, double simesh, std::vector<double>& P, std::vector<int>& SIZE, std::vector< std::vector<int> >& CHILD, std::vector<double>& TDP);
+std::vector<double> forestTDP(int m, int h, double alpha, double simesh, std::vector<double>& P, std::vector<int>& ORD, std::vector<int>& SIZE, std::vector<int>& ROOT, std::vector< std::vector<int> >& CHILD);
 std::vector<std::vector<int> > findClusters(int m, std::vector< std::vector<int> >& ADJ, std::vector<int>& ORD, std::vector<int>& RANK);
 std::vector<int> queryPreparation(int m, std::vector<int>& ROOT, std::vector<double>& TDP, std::vector< std::vector<int> >& CHILD);
 int findLeft(double gamma, std::vector<int>& ADMSTC, std::vector<double>& TDP);

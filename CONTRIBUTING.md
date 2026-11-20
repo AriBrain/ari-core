@@ -56,7 +56,7 @@ This repository is actively maintained by the ARIBrain development team. If you 
 
 - Use Python **3.10.14**
 - All C++ extensions must compile cleanly across platforms (macOS, Linux)
-- Install dependencies via `requirements.txt` or `pyproject.toml`
+- Dependencies are declared in `pyproject.toml`
 - Use `pipx` and `pyenv` for isolated testing
 
 ---

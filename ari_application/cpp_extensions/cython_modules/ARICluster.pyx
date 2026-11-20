@@ -8,8 +8,8 @@ from cython.operator cimport dereference as deref
 
 cdef extern from "../cpp_sources/ARICluster.h":
     vector[int] descendants(int v, vector[int]& SIZE, vector[vector[int]]& CHILD)
-    void heavyPathTDP(int v, int par, int m, int h, double alpha, double simesh, vector[double]& P, vector[int]& SIZE, vector[vector[int]]& CHILD, vector[double]& TDP)
-    vector[double] forestTDP(int m, int h, double alpha, double simesh, vector[double]& P, vector[int]& SIZE, vector[int]& ROOT, vector[vector[int]]& CHILD)
+    void heavyPathTDP(int v, int par, int m, int h, int z, double alpha, double simesh, vector[double]& P, vector[int]& SIZE, vector[vector[int]]& CHILD, vector[double]& TDP)
+    vector[double] forestTDP(int m, int h, double alpha, double simesh, vector[double]& P, vector[int]& ORD, vector[int]& SIZE, vector[int]& ROOT, vector[vector[int]]& CHILD)
     
     vector[vector[int]] findClusters(int m, vector[vector[int]]& ADJ, vector[int]& ORD, vector[int]& RANK)
 
@@ -48,24 +48,26 @@ def py_descendants(int v, list SIZE, list CHILD):
     cdef vector[int] result = descendants(v, SIZE_vector, CHILD_vector)
     return list(result)
 
-def py_heavyPathTDP(int v, int par, int m, int h, double alpha, double simesh, list P, list SIZE, list CHILD, list TDP):
+def py_heavyPathTDP(int v, int par, int m, int h, int z, double alpha, double simesh, list P, list SIZE, list CHILD, list TDP):
     cdef vector[double] P_vector = P
     cdef vector[int] SIZE_vector = SIZE
     cdef vector[vector[int]] CHILD_vector = [vector[int]() for _ in CHILD]
     for i, child in enumerate(CHILD):
         CHILD_vector[i] = child
     cdef vector[double] TDP_vector = TDP
-    heavyPathTDP(v, par, m, h, alpha, simesh, P_vector, SIZE_vector, CHILD_vector, TDP_vector)
+    heavyPathTDP(v, par, m, h, z, alpha, simesh, P_vector, SIZE_vector, CHILD_vector, TDP_vector)
 
-def py_forestTDP(int m, int h, double alpha, double simesh, list P, list SIZE, list ROOT, list CHILD):
+def py_forestTDP(int m, int h, double alpha, double simesh, list P, list ORD, list SIZE, list ROOT, list CHILD):
+    # P in voxel order; ORD its 1-based ascending sort order (ordp in pyARI.runARI).
     cdef vector[double] P_vector = P
+    cdef vector[int] ORD_vector = ORD
     cdef vector[int] SIZE_vector = SIZE
     cdef vector[int] ROOT_vector = ROOT
     cdef vector[vector[int]] CHILD_vector = [vector[int]() for _ in CHILD]
     for i, child in enumerate(CHILD):
         CHILD_vector[i] = child
 
-    cdef vector[double] result = forestTDP(m, h, alpha, simesh, P_vector, SIZE_vector, ROOT_vector, CHILD_vector)
+    cdef vector[double] result = forestTDP(m, h, alpha, simesh, P_vector, ORD_vector, SIZE_vector, ROOT_vector, CHILD_vector)
     
     return list(result)
 
