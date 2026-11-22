@@ -37,15 +37,24 @@ A comprehensive guide for researchers using ARIbrain to perform cluster-based st
    - [Interactive TDP Adjustment](#interactive-tdp-adjustment)
    - [Changing Cluster Size](#changing-cluster-size)
    - [State History Navigation](#state-history-navigation)
-9. [Managing Multiple Statistical Maps](#managing-multiple-statistical-maps)
-10. [Saving and Loading Projects](#saving-and-loading-projects)
+9. [ROI Analysis (Atlas-Based TDP)](#roi-analysis-atlas-based-tdp)
+   - [Preparing Your Atlas](#preparing-your-atlas)
+   - [Uploading an Atlas](#uploading-an-atlas)
+   - [Checking the Alignment](#checking-the-alignment)
+   - [Running the Analysis](#running-the-analysis)
+   - [Reading the ROI Table](#reading-the-roi-table)
+   - [Selecting ROIs](#selecting-rois)
+   - [Colour Modes](#colour-modes)
+   - [ROI Results Across Maps and Tabs](#roi-results-across-maps-and-tabs)
+10. [Managing Multiple Statistical Maps](#managing-multiple-statistical-maps)
+11. [Saving and Loading Projects](#saving-and-loading-projects)
     - [Saving a Project](#saving-a-project)
     - [Loading a Project](#loading-a-project)
-11. [Exporting Results](#exporting-results)
+12. [Exporting Results](#exporting-results)
     - [Export Options](#export-options)
     - [Understanding Exported Files](#understanding-exported-files)
-12. [Troubleshooting](#troubleshooting)
-13. [Glossary](#glossary)
+13. [Troubleshooting](#troubleshooting)
+14. [Glossary](#glossary)
 
 ---
 
@@ -56,6 +65,7 @@ ARIbrain is a desktop application for performing cluster-based statistical infer
 - Visualize statistical brain maps in 2D orthogonal views and 3D renderings
 - Apply statistically principled thresholding using True Discovery Proportion (TDP)
 - Interactively explore and adjust cluster boundaries
+- Compute TDP for the regions of your own anatomical atlas (ROI analysis)
 - Export publication-ready results and reports
 
 ARI provides a powerful alternative to traditional cluster-based inference by offering:
@@ -171,6 +181,7 @@ The left sidebar manages your analysis resources:
 **Atlas**
 - Shows available anatomical atlases (AAL2 by default)
 - Used for region labeling in the metrics panel
+- Click **+** to upload your own ROI atlas for [ROI Analysis](#roi-analysis-atlas-based-tdp). It appears in the list with a "user" badge; clicking it opens the **ROI Analysis** tab
 
 ### Orthogonal Brain Views
 
@@ -214,6 +225,7 @@ Displays real-time information about the current crosshair position:
 | **MNI (xyz)** | Current position in MNI coordinates (mm) |
 | **Cluster ID** | The cluster at the current position (if any) |
 | **Region (AAL2)** | Anatomical region from the AAL2 atlas |
+| **ROI** | Region of your uploaded atlas at the crosshair, with its TDP once the ROI analysis has run (only shown when a user atlas is loaded) |
 
 ---
 
@@ -377,6 +389,124 @@ Use the ↺ and ↻ buttons to navigate through cluster modification history:
 
 ---
 
+## ROI Analysis (Atlas-Based TDP)
+
+ROI analysis is an alternative to cluster-based inference. Instead of forming clusters from your data, ARIbrain takes the regions of an anatomical atlas you provide and computes a TDP for each region.
+
+**What the TDP of a region means:** a TDP of 0.40 for a region means that, with confidence 1 − alpha, at least 40% of the voxels in that region are truly active. It uses the same ARI machinery and the same alpha as the cluster analysis. The guarantee holds for all regions at once, so no extra multiple-comparisons correction is needed, however many regions your atlas has.
+
+All ROI work happens on the **ROI Analysis** tab, next to the Cluster Analysis tab.
+
+### Preparing Your Atlas
+
+**The atlas file** must be:
+- A 3D NIfTI file (`.nii` or `.nii.gz`)
+- Integer-labelled: every voxel with the same value belongs to the same region, and `0` is background (float-valued labels are rounded to the nearest integer)
+- In the **same standard space as your statistical map** (for example, both in MNI space)
+
+> **Important:** ARIbrain aligns the atlas to your data using the NIfTI headers only. It does not register images. If your statistical map is in native (scanner) space, the regions will land in the wrong place and the TDPs will be unreliable. ARIbrain writes a warning to the message log when the atlas or a raw-data background does not report a standard space in its header.
+
+**The codebook (optional)** is a text file that gives each region a name. It uses the same format as the bundled AAL2 codebook: one region per line, with at least three whitespace-separated columns. The first column is ignored, the last column is the integer label, and everything in between is the name:
+
+```
+1  Precentral_L   2001
+2  Precentral_R   2002
+3  Frontal_Sup_2_L 2101
+```
+
+Underscores in names are shown as spaces. Regions without a name in the codebook are called `ROI <label>`, and codebook entries for labels that are not in the atlas are ignored.
+
+ARIbrain picks up a codebook automatically if it sits next to the atlas with one of these names (for an atlas called `myatlas.nii.gz`):
+- `myatlas.txt`
+- `myatlas_CodeBook.txt`
+- `myatlas_codebook.txt`
+- `myatlas_labels.txt`
+
+You can also attach one later with **Upload Codebook**.
+
+### Uploading an Atlas
+
+1. Open the **ROI Analysis** tab
+2. Click **Upload Atlas** (or click **+** in the Atlas section of the left sidebar)
+3. Select your atlas NIfTI file
+
+After the upload:
+- The orthogonal views show the atlas on top of the template, one colour per region
+- **ROIs loaded** shows the number of regions
+- The table lists every region by name and label, with the other columns empty until you run the analysis
+- The message log reports the number of regions and whether a codebook was found
+- The **About ROI analysis** explanation collapses; click it to open it again
+
+Only one user atlas can be loaded at a time. Uploading a new atlas replaces the previous one and clears its ROI results for all statistical maps. The built-in AAL2 atlas stays available for the metrics panel either way.
+
+### Checking the Alignment
+
+Before you click **Run**, scroll through the orthogonal views and check that the regions line up with the anatomy of the template. The strip above the table shows the region under the crosshair:
+
+```
+Crosshair → Precentral L (label 2001)  TDP —  MNI (-38, -20, 56)
+```
+
+If the regions are clearly shifted, flipped or scaled, the atlas and the statistical map are most likely in different spaces. Fix that before running the analysis.
+
+### Running the Analysis
+
+1. Make sure ARI has run for the current statistical map (the "ARI" label in the sidebar is green)
+2. Click **Run** on the ROI Analysis tab
+3. A progress window shows each region as it is computed; click **Cancel** to stop
+
+The first run on a statistical map takes a little longer while ARIbrain prepares the calculation. When the run finishes, the table fills in and the message log shows a short summary. Regions with no voxels inside the analysis mask are skipped and are not listed in the table.
+
+TDPs are computed on the statistical map's own voxel grid, so they do not change when you switch the background template.
+
+### Reading the ROI Table
+
+Rows are sorted by TDP, highest first.
+
+| Column | Description |
+|--------|-------------|
+| **ROI** | Region name from the codebook (or `ROI <label>`) |
+| **Label** | Integer label of the region in the atlas |
+| **Size (vox)** | Number of the region's voxels that were analysed (inside the analysis mask, on the statistical map's grid) |
+| **TDP** | True Discovery Proportion lower bound for the region (0-1) |
+| **Centroid (vox)** | Centre of the region in voxel coordinates of the displayed template |
+| **Centroid (MNI)** | Centre of the region in MNI coordinates (mm) |
+
+**Note:** the centroid is the region's centre of mass. For curved or split regions it can fall just outside the region itself.
+
+### Selecting ROIs
+
+**From the table:**
+1. Click on a row
+2. The crosshairs move to the region's centroid
+3. The region is outlined in cyan in the orthogonal views
+4. The 3D viewer shows the region
+
+**From the brain views:**
+1. Move the crosshair onto a region
+2. Right-click in any orthogonal view and choose **Select ROI (xyz)**
+3. The region is selected and highlighted in the table; the crosshair stays where you put it
+
+While you are on the ROI Analysis tab, the Cluster Work Station is hidden to give the ROI table more room, and the **Local Minimum** option in the right-click menu is disabled, since both apply to clusters only.
+
+### Colour Modes
+
+Use the dropdown next to **ROIs loaded** to choose how regions are coloured:
+
+| Mode | Description |
+|------|-------------|
+| **Categorical** | Each region gets its own fixed colour (default) |
+| **TDP heatmap** | Regions are coloured by TDP on a viridis scale, from dark purple (lowest) to yellow (highest) |
+
+The TDP heatmap becomes available after **Run**. Its scale is stretched between the lowest and highest TDP of the current analysis, so colours cannot be compared between statistical maps. The app does not show a colour legend; the HTML report states the range at the time of export.
+
+### ROI Results Across Maps and Tabs
+
+- **Several statistical maps:** the atlas is shared by all loaded maps, but ROI results belong to one map. After switching to another map, click **Run** again to compute its TDPs. The atlas is aligned automatically to maps you add later.
+- **Switching tabs:** the Whole Brain TDP and Cluster Analysis tabs show the cluster overlay, and the ROI Analysis tab shows the atlas. ARIbrain remembers the selection and view of each, so you can switch back and forth without losing your place.
+
+---
+
 ## Managing Multiple Statistical Maps
 
 ARIbrain supports analyzing multiple statistical maps simultaneously.
@@ -414,6 +544,9 @@ Access via the **Save & Export** tab.
 - Cluster modifications
 - Template configurations
 - UI state (selected clusters, crosshair positions)
+- ROI analysis: the atlas file location, its codebook and the ROI results tables
+
+**Note:** the atlas image itself is not stored in the `.ari` file. When you load the project, ARIbrain reads the atlas again from its original location. If the file has been moved or deleted, the ROI results tables are still shown, but the atlas overlay is not. Upload the atlas again and click **Run** to restore it (uploading an atlas clears the previous ROI results).
 
 ### Loading a Project
 
@@ -444,6 +577,11 @@ Click **Export Results** in the **Save & Export** tab to export all results to a
 | `3d_cluster_view.png` | PNG | Screenshot of the current 3D view |
 | `full_report.html` | HTML | Interactive report with tables and images |
 | `ARI_report_table.pdf` | PDF | Formatted cluster table for publication |
+| `roi_table_<map>_N.csv` | CSV | ROI table for each statistical map with ROI results |
+| `roi_atlas_map_<map>_N.nii.gz` | NIfTI | Atlas region labels (values = the **Label** column in the ROI table) |
+| `roi_tdp_map_<map>_N.nii.gz` | NIfTI | Each region's voxels set to that region's TDP |
+
+The three ROI files are only written for statistical maps on which you ran the ROI analysis. `<map>` is the statistical map's filename without its extension. Both ROI NIfTI maps are on the statistical map's own voxel grid and only contain the voxels that were analysed (inside the analysis mask), so they overlay directly on your data and on the cluster map.
 
 **Using the cluster map NIfTI:**
 - Load in any NIfTI viewer (FSLeyes, MRIcron, etc.)
@@ -457,6 +595,7 @@ Click **Export Results** in the **Save & Export** tab to export all results to a
 - Cluster tables with all statistics
 - Embedded orthogonal view screenshots
 - Explanation of table columns
+- An **ROI Analysis (User Atlas)** section, when ROI results exist: the atlas name, the ROI table for each statistical map, and screenshots of the atlas overlay in the current colour mode (the selected region, if any, is outlined)
 
 ---
 
@@ -482,6 +621,17 @@ Click **Export Results** in the **Save & Export** tab to export all results to a
 - Verify your NIfTI file has correct header information
 - Check that the sform/qform matrices are properly set
 
+**Atlas regions don't line up with the brain**
+- The atlas and the statistical map must be in the same standard space (e.g. both MNI); ARIbrain does not register images
+- Check the message log for warnings about native/scanner space
+- Check the sform/qform of both files
+
+**ROI names show as "ROI 2001" etc.**
+- No codebook was found. Click **Upload Codebook**, or place the codebook next to the atlas file (see [Preparing Your Atlas](#preparing-your-atlas))
+
+**A region is missing from the ROI table**
+- Regions with no voxels inside the analysis mask are skipped; the message log reports how many were skipped
+
 ### Getting Help
 
 If you encounter issues:
@@ -496,7 +646,9 @@ If you encounter issues:
 | Term | Definition |
 |------|------------|
 | **ARI** | All-Resolutions Inference - a statistical framework for simultaneous inference at all thresholds |
+| **Atlas** | An image that divides the brain into labelled regions; each integer value marks one region |
 | **Cluster** | A contiguous group of voxels meeting the statistical threshold |
+| **Codebook** | A text file that maps atlas labels to region names |
 | **Crosshair** | The intersecting lines indicating the current position in 3D space |
 | **Degrees of Freedom** | Statistical parameter required for t-distributions |
 | **Gradient Map** | Visualization showing maximum achievable TDP at each voxel |
@@ -506,6 +658,7 @@ If you encounter issues:
 | **NIfTI** | Neuroimaging Informatics Technology Initiative - standard brain image format |
 | **Orthogonal Views** | The three perpendicular 2D slice views (sagittal, coronal, axial) |
 | **P-value** | Probability of observing the data under the null hypothesis |
+| **ROI** | Region of interest - here, one labelled region of an uploaded atlas |
 | **Sform** | Affine transformation matrix in NIfTI headers defining spatial orientation |
 | **TDP** | True Discovery Proportion - the proportion of truly active voxels in a cluster |
 | **Template** | Anatomical reference image for visualization |
@@ -526,6 +679,7 @@ If you encounter issues:
 | Rotate 3D view | Click and drag in 3D viewer |
 | Zoom 3D view | Scroll wheel |
 | Select cluster | Click table row |
+| Select ROI | Click ROI table row, or right-click in a view → **Select ROI (xyz)** |
 | Apply threshold | Press Enter in threshold textbox |
 
 ### Key Thresholds
@@ -544,6 +698,7 @@ If you encounter issues:
 | `.nii` | Uncompressed NIfTI image |
 | `.nii.gz` | Compressed NIfTI image |
 | `.ari` | ARIbrain project file |
+| `.txt` | Atlas codebook (region names) |
 
 ---
 

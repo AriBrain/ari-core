@@ -1,6 +1,6 @@
 # Backlog
 
-Known bugs and follow-ups that are not fixed yet. Each entry says what the user sees, what causes it, and how we plan to fix it. When you fix one, delete it here and mention the entry in the commit message.
+Known bugs and follow-ups that are not fixed yet, plus planned work (at the end). Each bug entry says what the user sees, what causes it, and how we plan to fix it. When you fix one, delete it here and mention the entry in the commit message.
 
 Function names are given rather than line numbers, because line numbers drift.
 
@@ -82,3 +82,33 @@ Reported November 2026.
 - **p-maps whose strongest voxels underflowed to exactly 0:** the auto-mask removes those voxels without warning. Uploading a mask avoids it. Document this in the user guide.
 - **The masking work was not tested in the real 3D viewer.** Offscreen test runs replace it with a stand-in, because it needs an OpenGL context.
 - **`docs/MASKING_FIX_PLAN.md` is out of date.** It describes an earlier, broader plan.
+
+## Planned work
+
+### Story/fix: slight misalignment depending on the map/template combination
+
+- **Symptom:** overlays (atlas, clusters) sit slightly off the background for some combinations of statistical map and template, and look right for others.
+- **What we know:**
+  - Alignment is header-based, not image registration. `ImageProcessing.align_images` maps voxels through world (mm) coordinates using both images' affines, then resamples with nearest neighbour (`order=0`), which integer labels require.
+  - Atlas on an MNI template looks right, because the grids are nearly identical (about 2 mm). Atlas on a raw-data background looks slightly off, because the statmap grid is coarser (often 3 to 4 mm). Nearest-neighbour resampling onto that grid makes region boundaries visibly blocky.
+  - Data that is not in MNI space cannot be aligned this way at all; that would need registration. `NiftiLoader._spatial_space` warns when a file's header says it is not in a standard space, but the header can be wrong.
+  - The analysis itself is not affected: statistics always run on the statmap's own grid, and only the display is resampled.
+- **To do:**
+  - Reproduce on a list of map/template combinations and sort each case into one of three kinds: expected resampling blockiness, a real orientation or affine bug, or data that is not in MNI space.
+  - Fix any real bugs.
+  - For the blockiness, consider showing the overlay on the finer of the two grids, or explaining it in the UI.
+
+### Epic: Windows version
+
+- **Today:** `install.ps1` installs on Windows through pipx and builds the C++ extensions on the user's machine. The standalone build (`aribrain.spec`, `docs/BUILD_INSTRUCTIONS.md`) covers macOS only.
+- **To scope:**
+  - A Windows standalone build with PyInstaller.
+  - The C++ compiler requirement for the pipx route, and whether to ship prebuilt wheels instead.
+  - Path handling, and file names with spaces or non-ASCII characters.
+  - Qt and the PyVista 3D viewer (OpenGL) on typical Windows machines.
+  - A test pass on a real Windows install.
+
+### First screen upgrade (UI/UX)
+
+- **Scope:** the start window (`ui/start_window.py`), where the user chooses New Project or Load Project and configures the inputs before ARI runs.
+- **To do:** redesign the layout and flow to match the newer main-window styling. The details are still to be defined.
