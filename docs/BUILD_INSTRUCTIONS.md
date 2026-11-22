@@ -72,7 +72,22 @@ analysis so imports are re-resolved from scratch.
 
 ```bash
 cd dist
-zip -r ARIbrain-macos.zip ARIbrain.app
+ditto -c -k --keepParent ARIbrain.app ARIbrain-macOS-AppleSilicon.zip
+```
+
+Use `ditto`, not `zip -r`. The bundle contains symlinks (for example
+inside the Qt frameworks), and `zip -r` stores them as copies of the
+files they point to. That breaks the app's code signature: after
+unzipping, `codesign --verify --deep --strict` reports "a sealed
+resource is missing or invalid", and macOS tells users that the
+downloaded app "is damaged and can't be opened". `ditto` keeps the
+symlinks, so the signature stays valid.
+
+To check a zip before publishing it:
+
+```bash
+mkdir /tmp/zipcheck && ditto -x -k ARIbrain-macOS-AppleSilicon.zip /tmp/zipcheck
+codesign --verify --deep --strict /tmp/zipcheck/ARIbrain.app && echo OK
 ```
 
 ## Testing
@@ -99,11 +114,24 @@ python3.10 -m venv .build-venv
 .build-venv/bin/pip install --upgrade pip
 .build-venv/bin/pip install -e ".[build]"
 .build-venv/bin/pyinstaller aribrain.spec --clean
-cd dist && zip -r ARIbrain-v0.1.0-macos.zip ARIbrain.app
+cd dist && ditto -c -k --keepParent ARIbrain.app ARIbrain-macOS-AppleSilicon.zip
 ```
 
 Reasons: no dev cruft from interactive experimentation, the build matches
 a specific commit, and `/tmp/ari-core-release` is throwaway.
+
+### Publishing the release
+
+1. On GitHub: **Releases → Draft a new release**, pick the tag
+   (e.g. `v0.1.0`) and attach the zip.
+2. Keep the file name exactly **`ARIbrain-macOS-AppleSilicon.zip`** for
+   every release. The download button on aribrain.eu links to
+   `https://github.com/AriBrain/ari-core/releases/latest/download/ARIbrain-macOS-AppleSilicon.zip`,
+   so it always serves the newest release without changes to the
+   website. The version is in the tag and the release title.
+3. The zip only runs on Macs with the same processor type as the build
+   machine. A build on an Apple Silicon Mac (M1 or newer) does not run on
+   Intel Macs.
 
 ## Troubleshooting
 
